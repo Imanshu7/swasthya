@@ -2,7 +2,7 @@
 ### Real-Time National PHC Operations, Multimodal AI Field Input, and Autonomous Cross-District Redistribution
 
 > **Google Build with AI: Code for Communities Hackathon Submission**  
-> **Track:** Healthcare & Community Resilience  
+> **Track 3:** Smart Health & Supply Chain Resilience  
 > **Live Demo:** [https://Imanshu7.github.io/swasthya/](https://Imanshu7.github.io/swasthya/)  
 > **Repository:** [https://github.com/Imanshu7/swasthya](https://github.com/Imanshu7/swasthya)
 
@@ -150,6 +150,12 @@ window.GCLOUD = {
 | `↑` / `↓` | Navigate through facility records in the national ledger |
 | `Enter` | Select and inspect facility details in the active pane |
 | `t` | Instantly launch the AI Redistribution Agent for the selected facility |
+
+---
+
+## Team Members
+- Himanshu
+- Krish
 
 ---
 
