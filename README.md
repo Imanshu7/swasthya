@@ -155,7 +155,7 @@ window.GCLOUD = {
 
 ## Team Members
 - Himanshu
-- Kei
+- Krish Pranami
 
 ---
 
