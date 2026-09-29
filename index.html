@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f3ef">
+<meta name="description" content="Swasthya Supply Resilience — real-time PHC network visibility, field input, forecasting and cross-district redistribution for India's primary health centres.">
+<title>Swasthya Supply Resilience — National PHC Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-main">
+    <div class="brandline">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="brandtext">
+        <b>Swasthya</b>
+        <i>National PHC Operations</i>
+      </span>
+    </div>
+
+    <nav class="seg" id="mainNav" aria-label="Workspaces">
+      <button data-view="network" class="active">Network</button>
+      <button data-view="field">
+        <span>Staff</span>
+        <span class="nav-pip" aria-hidden="true"></span>
+      </button>
+      <button data-view="forecast">Forecast</button>
+      <button data-view="redist">Transfers</button>
+      <button data-view="federated">Federated</button>
+      <button data-view="depot">
+        <span>Depot</span>
+        <span class="nav-pip" id="depotPip" aria-hidden="true"></span>
+      </button>
+      <button data-view="data">Data</button>
+    </nav>
+
+    <div class="top-meta">
+      <!-- Operator switcher -->
+      <div class="operator-pill" id="opSelector" title="Switch active operator role">
+        <span class="op-avatar" id="opAvatar">AS</span>
+        <div class="op-info">
+          <span class="op-name" id="opName">Dr. Ananya Sen</span>
+          <span class="op-role" id="opRole">Duty Pharmacist</span>
+        </div>
+        <span class="op-arrow" aria-hidden="true"></span>
+        <div class="op-menu" id="opMenu">
+          <div class="op-opt active" data-role="pharmacist" data-name="Dr. Ananya Sen" data-title="Duty Pharmacist" data-avatar="AS">
+            <div class="op-opt-hdr">
+              <span class="op-mini-avatar">AS</span>
+              <b>Dr. Ananya Sen</b>
+            </div>
+            <small>Duty Pharmacist · Ground Level</small>
+          </div>
+          <div class="op-opt" data-role="officer" data-name="Dr. K. V. Raman" data-title="District Medical Officer" data-avatar="KR">
+            <div class="op-opt-hdr">
+              <span class="op-mini-avatar">KR</span>
+              <b>Dr. K. V. Raman</b>
+            </div>
+            <small>District Medical Officer · Oversight</small>
+          </div>
+          <div class="op-opt" data-role="depot" data-name="M. Suresh" data-title="State Depot Dispatcher" data-avatar="MS">
+            <div class="op-opt-hdr">
+              <span class="op-mini-avatar">MS</span>
+              <b>M. Suresh</b>
+            </div>
+            <small>State Warehouse · Supply Logistics</small>
+          </div>
+          <div class="op-menu-divider" style="height:1px;background:var(--line);margin:4px 0"></div>
+          <div class="op-opt" id="btnOpenAuthFromMenu" style="background:var(--blue-bg);color:var(--blue-dark);padding:7px 10px">
+            <b style="font-size:11.5px">Open ABDM / ABHA Login</b>
+            <small style="padding-left:0;color:var(--blue-dark)">Phone OTP · Google Sign-In · Personas</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulation controls -->
+      <div class="sim-ctrls">
+        <button class="sim-btn" id="btnToggleSim" title="Pause / Resume Live Simulation">Pause</button>
+        <button class="sim-btn accent" id="btnSurge" title="Simulate Sudden Patient Surge">Surge</button>
+        <button class="sim-btn accent" id="btnDepotDrop" title="Simulate Inward Depot Replenishment">Replenish</button>
+        <button class="sim-btn" id="btnSettings" title="API Keys & Data Calibration">Settings</button>
+      </div>
+
+
+      <div class="sync" id="liveLabel" title="Real-time sync status">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <span class="sync-tag" id="syncTag">Sim</span>
+        <span class="sync-clock" id="clock">--:--:--</span>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="liverail" id="liverail" aria-hidden="true"></div>
+
+<main class="content">
+
+  <!-- NETWORK -->
+  <section class="view active" id="v-network" aria-label="Network">
+    <!-- National Overview KPI Cards -->
+    <div class="kpi-strip">
+      <div class="kpi-card">
+        <span class="kpi-label">Monitored Facilities</span>
+        <div class="kpi-val" id="kpiPhcCount">60</div>
+        <span class="kpi-sub">12 States · Federated</span>
+      </div>
+      <div class="kpi-card alert-card" id="kpiCriticalCard">
+        <span class="kpi-label">Early Warnings</span>
+        <div class="kpi-val" id="kpiCriticalVal">—</div>
+        <span class="kpi-sub" id="kpiCriticalSub">Low stock detected</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Average Cover</span>
+        <div class="kpi-val" id="kpiAvgCover">—</div>
+        <span class="kpi-sub">Essential drugs reserve</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Audited Writes Today</span>
+        <div class="kpi-val" id="kpiWritesToday">0</div>
+        <span class="kpi-sub" id="kpiWritesSub">Verified ledger updates</span>
+      </div>
+    </div>
+
+    <div class="hello-wrap">
+      <p class="hello" id="briefLine">Loading network status…</p>
+      <div class="mobile-pane-toggle" id="mobilePaneToggle">
+        <button class="btn sm quiet" id="btnShowRecordPane">View Active Record</button>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="sheet" id="ledgerSheet">
+        <div class="searchrow">
+          <div class="search">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input id="fSearch" type="text" placeholder="Search facilities, districts, states…" aria-label="Search facilities">
+            <kbd>/</kbd>
+          </div>
+        </div>
+        <div class="filterrow">
+          <select id="fState" aria-label="Filter by state"><option value="">All states</option></select>
+          <select id="fRisk" aria-label="Filter by risk">
+            <option value="">All levels</option>
+            <option value="critical">Critical &lt; 5 days</option>
+            <option value="watch">Watch &lt; 12 days</option>
+            <option value="stable">Stable</option>
+          </select>
+          <span class="legend">
+            <span class="legend-item"><i class="sw c"></i>&lt;5d</span>
+            <span class="legend-item"><i class="sw w"></i>&lt;12d</span>
+            <span class="legend-item"><i class="sw s"></i>Stable</span>
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table class="ledger-table">
+            <thead><tr><th>Cover</th><th>Facility</th><th>Footfall</th><th>Limiting Drug</th><th></th></tr></thead>
+            <tbody id="phcList"></tbody>
+          </table>
+        </div>
+        <div class="sheet-foot">
+          <span class="hint" id="mapHint" aria-live="polite"></span>
+          <span class="keys"><kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>t</kbd> transfer</span>
+        </div>
+      </div>
+
+      <div class="sheet pane" id="recordPane">
+        <div class="p-head">
+          <div class="p-head-meta">
+            <div class="kicker" id="dKick">Select a facility</div>
+            <button class="mobile-back-btn" id="btnMobileBackToList">Back to list</button>
+          </div>
+          <h2 id="dName">—</h2>
+          <div class="p-sub" id="dSub">Choose any row from the ledger to inspect facility metrics.</div>
+        </div>
+        <div class="pmap" id="pmap" aria-label="Facility map"></div>
+        <div class="p-body" id="dBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STAFF OPERATIONS & FIELD PORTAL -->
+  <section class="view" id="v-field" aria-label="Staff Operations & Field Portal">
+    <!-- Health Worker Authentication Status Banner -->
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:12px;background:#fbfbfd;border:1px solid var(--line);border-radius:var(--r-md)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="chip chip-info" style="font-size:10px">ABDM Verified Session</span>
+        <span style="font-size:12.5px;color:var(--ink)">Signed in as <b id="portalAuthName">Dr. Ananya Sen</b> (<span id="portalAuthTitle">Duty Pharmacist</span>) · ABHA: <code id="portalAuthAbha" style="font-family:var(--mono);color:var(--blue);font-weight:700">91-4821-3901-22</code></span>
+      </div>
+      <button class="btn sm secondary" id="btnSwitchAuthFromPortal">Switch Account / Login</button>
+    </div>
+
+    <!-- Active Facility Banner in Portal -->
+    <div class="portal-fac-banner">
+      <div class="pfb-left">
+        <span class="pfb-tag">Active Facility</span>
+        <h3 id="portalFacName">—</h3>
+        <p id="portalFacMeta">Select a PHC from the dropdown or the Network view</p>
+      </div>
+      <div class="pfb-right">
+        <div class="field-inline">
+          <label for="portalPhcSelect">Facility:</label>
+          <select id="portalPhcSelect" class="portal-select"></select>
+        </div>
+        <div class="cold-chain-badge" id="portalColdBadge" title="Cold chain storage monitoring">
+          <span class="cc-dot"></span>
+          <span id="portalColdText">Cold Chain: 3.8°C (Optimal)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="seg method-tabs" role="tablist" aria-label="Input method">
+      <button class="method-tab active" data-method="shelf" role="tab">Shelf Audit</button>
+      <button class="method-tab" data-method="manual-all" role="tab">Manual Overhaul</button>
+      <button class="method-tab" data-method="add-drug" role="tab">Add Medicine</button>
+      <button class="method-tab" data-method="inward" role="tab">Inward Supply</button>
+      <button class="method-tab" data-method="voice" role="tab">Voice Assistant</button>
+      <button class="method-tab" data-method="vision" role="tab">Register OCR</button>
+      <button class="method-tab" data-method="vitals" role="tab">Vitals &amp; Capacity</button>
+    </div>
+
+    <!-- 0. MANUAL OVERHAUL (Update Anything Directly) -->
+    <div class="method-panel" id="m-manual-all">
+      <div class="card">
+        <div class="card-top">
+          <h3>Manual Facility Overhaul — Direct Input</h3>
+          <p>Directly adjust any parameter for the selected facility: inventory stock counts, burn rate, beds, staffing, OPD footfall, and cold-chain telemetry.</p>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="moDrug">Medicine to Update</label>
+            <select id="moDrug"></select>
+          </div>
+          <div class="field">
+            <label for="moStock">New Stock Count (units)</label>
+            <input type="number" id="moStock" placeholder="e.g. 1400" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="moBurn">Daily Burn Rate Override (units/day)</label>
+            <input type="number" id="moBurn" placeholder="e.g. 8.5" step="0.1" min="0.1">
+          </div>
+          <div class="field">
+            <label for="moFootfall">OPD Patient Footfall Today</label>
+            <input type="number" id="moFootfall" placeholder="e.g. 155" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="moBedsOccupied">Inpatient Beds Occupied</label>
+            <input type="number" id="moBedsOccupied" placeholder="e.g. 6" min="0">
+          </div>
+          <div class="field">
+            <label for="moBedsTotal">Total Bed Capacity</label>
+            <input type="number" id="moBedsTotal" placeholder="e.g. 10" min="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="moStaffPresent">Staff on Duty (Present)</label>
+            <input type="number" id="moStaffPresent" placeholder="e.g. 12" min="1">
+          </div>
+          <div class="field">
+            <label for="moStaffTotal">Total Assigned Staff</label>
+            <input type="number" id="moStaffTotal" placeholder="e.g. 16" min="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="moCold">Cold-Chain Refrigerator Temp (°C)</label>
+            <input type="number" id="moCold" placeholder="e.g. 3.8" step="0.1">
+          </div>
+          <div class="field">
+            <label for="moWeather">Weather Anomaly Index (-0.2 to +0.8)</label>
+            <input type="number" id="moWeather" placeholder="e.g. 0.35" step="0.05">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label for="moNotes">Audit Justification / Field Remarks</label>
+          <input type="text" id="moNotes" placeholder="e.g. Physical stock count and capacity verified during morning audit handover">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnCommitManualAll">Commit Manual Overhaul to Ledger</button>
+        </div>
+        <p class="fineprint">Committed under active operator identity · Instantly updates Network ledger, pane, and risk forecasts.</p>
+      </div>
+    </div>
+
+    <!-- 0B. ADD MEDICINE TO INVENTORY -->
+    <div class="method-panel" id="m-add-drug">
+      <div class="card">
+        <div class="card-top">
+          <h3>Register New Medicine into Catalog</h3>
+          <p>Add a new pharmaceutical or medical consumable to the facility's formulary. It will be immediately tracked in real-time, appear in daily shelf audits, and feed into depletion forecasts.</p>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="newDrugName">Medicine Commercial Name &amp; Strength</label>
+            <input type="text" id="newDrugName" placeholder="e.g. Azithromycin 500mg">
+          </div>
+          <div class="field">
+            <label for="newDrugKey">Identifier / Code Key (lowercase, no spaces)</label>
+            <input type="text" id="newDrugKey" placeholder="e.g. azithromycin">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="newDrugSafety">Minimum Safety Stock Level (units)</label>
+            <input type="number" id="newDrugSafety" placeholder="e.g. 450" min="1">
+          </div>
+          <div class="field">
+            <label for="newDrugBurn">Estimated Daily Burn Rate (units/day)</label>
+            <input type="number" id="newDrugBurn" placeholder="e.g. 4.2" step="0.1" min="0.1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="newDrugStock">Initial In-Stock Count (units)</label>
+            <input type="number" id="newDrugStock" placeholder="e.g. 700" min="0">
+          </div>
+          <div class="field">
+            <label for="newDrugScope">Inventory Scope</label>
+            <select id="newDrugScope">
+              <option value="active">Active Facility Only</option>
+              <option value="all">All 60 Facilities in Network</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnAddDrug">Add Medicine to Formulary</button>
+        </div>
+        <p class="fineprint">New medicine automatically integrates with haversine transfer routing and live simulation consumption.</p>
+      </div>
+    </div>
+
+    <!-- 1. FULL SHELF AUDIT (Batch Update) -->
+    <div class="method-panel active" id="m-shelf">
+      <div class="card">
+        <div class="card-top flex-between">
+          <div>
+            <h3>Physical Stock Count — Essential Medicines</h3>
+            <p>Verify current counts against physical shelf stock. Adjust with steppers or quick-fill buttons, then commit the audited count.</p>
+          </div>
+          <button class="btn quiet sm" id="btnResetShelf">Reset to Current</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="ledger shelf-table" id="shelfTable">
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Safety Level</th>
+                <th>Burn Rate</th>
+                <th>Current Stock</th>
+                <th style="min-width:180px">Verified Count</th>
+                <th>Projected Cover</th>
+              </tr>
+            </thead>
+            <tbody id="shelfRows"></tbody>
+          </table>
+        </div>
+
+        <div class="shelf-commit-bar">
+          <div class="scb-summary" id="shelfSummary">Ready to commit audited numbers.</div>
+          <button class="btn primary" id="btnCommitShelf">Commit Verified Stock</button>
+        </div>
+        <p class="fineprint">Verified by duty pharmacist · Timestamped and cryptographically signed in audit log.</p>
+      </div>
+    </div>
+
+    <!-- 2. INWARD SUPPLIES (Depot Consignment Receipt) -->
+    <div class="method-panel" id="m-inward">
+      <div class="card">
+        <div class="card-top">
+          <h3>Log Inward Shipment from Central Depot</h3>
+          <p>Record medicine consignments arriving via state transport trucks or district supply vans.</p>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="inwardChallan">Consignment / Challan Number</label>
+            <input type="text" id="inwardChallan" placeholder="e.g. CMS-2026-9481">
+          </div>
+          <div class="field">
+            <label for="inwardSource">Dispatch Source</label>
+            <select id="inwardSource">
+              <option value="State Central Medical Store (CMS)">State Central Medical Store (CMS)</option>
+              <option value="District Health Depot">District Health Depot</option>
+              <option value="Inter-district Mutual Aid">Inter-district Mutual Aid</option>
+              <option value="Emergency Relief Reserve">Emergency Relief Reserve</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="inwardDrug">Medicine Received</label>
+            <select id="inwardDrug"></select>
+          </div>
+          <div class="field">
+            <label for="inwardQty">Quantity Received (units)</label>
+            <input type="number" id="inwardQty" placeholder="e.g. 500" min="1" step="50">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="inwardTemp">Cold-Chain Temperature upon Arrival (°C)</label>
+            <input type="text" id="inwardTemp" value="4.2°C (Compliant: 2–8°C)">
+          </div>
+          <div class="field">
+            <label for="inwardNotes">Batch / Verification Notes</label>
+            <input type="text" id="inwardNotes" placeholder="Seal verified, expiry checked">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnCommitInward">Accept Consignment &amp; Update Inventory</button>
+        </div>
+        <p class="fineprint">Automatically debits depot allocations and updates recipient facility stock across network.</p>
+      </div>
+    </div>
+
+    <!-- 3. VOICE (Multilingual STT) -->
+    <div class="method-panel" id="m-voice">
+      <div class="card">
+        <div class="card-top"><h3>Voice Attendance, Footfall &amp; Stock Logging</h3></div>
+        <p>Ground staff can speak natural updates in their regional language. Web Speech STT transcribes, Dialogflow extracts parameters, and pharmacist confirms.</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="voiceLang">Language</label>
+            <select id="voiceLang">
+              <option value="hi-IN" selected>Hindi — हिन्दी</option>
+              <option value="en-IN">English (India)</option>
+              <option value="bn-IN">Bengali — বাংলা</option>
+              <option value="mr-IN">Marathi — मराठी</option>
+              <option value="ta-IN">Tamil — தமிழ்</option>
+              <option value="te-IN">Telugu — తెలుగు</option>
+              <option value="kn-IN">Kannada — ಕನ್ನಡ</option>
+              <option value="gu-IN">Gujarati — ગુજરાતી</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="voicePhc">Target Facility</label>
+            <select id="voicePhc"></select>
+          </div>
+        </div>
+
+        <!-- Voice wave animation widget -->
+        <div class="voice-wave-box" id="voiceWaveBox">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <span class="wave-status" id="voiceStatus">Microphone ready</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn primary" id="btnListen">Start Listening</button>
+          <span class="btn-sep">or sample utterance:</span>
+          <button class="btn quiet sm btn-sample-voice" data-text="आज उपस्थिति 14, ओपीडी 132, पैरासिटामोल 800">Hindi Sample</button>
+          <button class="btn quiet sm btn-sample-voice" data-text="இன்று வருகை 11, நோயாளிகள் 128, ORS 700">Tamil Sample</button>
+          <button class="btn quiet sm btn-sample-voice" data-text="attendance 12, OPD 145, amoxicillin 620">English Sample</button>
+        </div>
+
+        <div class="field">
+          <label for="transcript">Recognized Transcript</label>
+          <textarea id="transcript" rows="2" placeholder="Transcript appears here when spoken or simulated…"></textarea>
+        </div>
+        <div id="parsedBox"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnApplyVoice" disabled>Confirm &amp; Update Record</button>
+        </div>
+        <p class="fineprint">Device mic → Cloud Speech-to-Text → Translation → Dialogflow intent → Verified write.</p>
+      </div>
+    </div>
+
+    <!-- 4. VISION (Register Photo OCR) -->
+    <div class="method-panel" id="m-vision">
+      <div class="card">
+        <div class="card-top"><h3>Photograph Register or Shelf</h3></div>
+        <p>Upload or capture a photo of daily ledger sheets or stock cards. Vertex AI Vision extracts line items and Gemini structures quantities for sign-off.</p>
+
+        <div class="sample-photo-bar">
+          <span style="font-size:12.5px;color:var(--muted);font-weight:600">Sample Sheets:</span>
+          <button class="btn quiet sm" id="btnSampleRegister1">Sample 1: Daily OPD Register</button>
+          <button class="btn quiet sm" id="btnSampleRegister2">Sample 2: Emergency Ward Stock</button>
+        </div>
+
+        <div class="field" style="margin-top:10px">
+          <label for="visionFile">Upload Register Document</label>
+          <input type="file" id="visionFile" accept="image/*">
+        </div>
+
+        <div id="visionPreview" class="vision-preview-container"></div>
+        <div id="visionOut"></div>
+        <p class="fineprint">Image → Cloud Storage → Vertex Vision OCR → Gemini structuring → Pharmacist confirmation → Ledger.</p>
+      </div>
+    </div>
+
+    <!-- 5. VITALS & CAPACITY -->
+    <div class="method-panel" id="m-vitals">
+      <div class="card">
+        <div class="card-top"><h3>Daily Clinic Vitals, Beds &amp; Cold-Chain</h3></div>
+        <p>Ground truth capacity metrics. Updated daily before 11:00 AM by PHC duty staff.</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="vitPhc">Facility</label>
+            <select id="vitPhc"></select>
+          </div>
+          <div class="field">
+            <label for="vitStaff">Staff on Duty (Present)</label>
+            <input type="number" id="vitStaff" placeholder="e.g. 14" min="1" max="40">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="vitFoot">OPD Patient Footfall Today</label>
+            <input type="number" id="vitFoot" placeholder="e.g. 135" min="0">
+          </div>
+          <div class="field">
+            <label for="vitBeds">Inpatient Beds Occupied</label>
+            <input type="number" id="vitBeds" placeholder="e.g. 5" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="vitCold">Cold-Chain Fridge Temp (°C)</label>
+            <input type="number" id="vitCold" value="3.8" step="0.1">
+          </div>
+          <div class="field">
+            <label for="vitPower">Power &amp; Backup Status</label>
+            <select id="vitPower">
+              <option value="normal">Grid Online · Solar Backup 100%</option>
+              <option value="generator">Generator Active</option>
+              <option value="battery">Battery Inverter Reserve</option>
+              <option value="alert">Power Outage Alert</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnCommitVitals">Commit Daily Vitals</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audited Writes Log -->
+    <div class="card">
+      <div class="card-top flex-between">
+        <h3>Audited Write Receipts</h3>
+        <button class="btn quiet sm" id="btnExportAudit">Export Log (JSON)</button>
+      </div>
+      <div id="auditLog"></div>
+    </div>
+  </section>
+
+  <!-- FORECAST -->
+  <section class="view" id="v-forecast" aria-label="Forecast">
+    <div class="pagehead">
+      <h2>Depletion Forecasting &amp; Burn Projection</h2>
+      <p>Cover = stock ÷ (daily burn × footfall factor × weather anomaly). Critical below 5 days, watch below 12.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-top"><h3>Predictive Model Signals</h3></div>
+        <p id="wxLine">IMD feed: —</p>
+        <table class="ledger">
+          <tr><th>Signal</th><th>Source</th><th class="num">Weight</th></tr>
+          <tr><td>14-day footfall trend</td><td>PHC registers</td><td class="num">0.45</td></tr>
+          <tr><td>Consumption rate</td><td>Stock ledger</td><td class="num">0.30</td></tr>
+          <tr><td>Weather anomaly</td><td>IMD open data</td><td class="num">0.15</td></tr>
+          <tr><td>Seasonal burden</td><td>WHO open data</td><td class="num">0.10</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-top"><h3>National Patient Footfall — 14d History + 7d Projection</h3></div>
+        <canvas id="forecastChart" height="150"></canvas>
+      </div>
+    </div>
+    <div class="sheet">
+      <div class="sheet-hd">
+        <h3>Early Warning Depletion Ledger</h3>
+        <span class="hint" id="fcCount"></span>
+      </div>
+      <div id="forecastList"></div>
+    </div>
+  </section>
+
+  <!-- TRANSFERS -->
+  <section class="view" id="v-redist" aria-label="Transfers">
+    <div class="pagehead">
+      <h2>Inter-District Stock Redistribution</h2>
+      <p>Nearest-surplus solver identifies clinics within 250 km possessing &gt;1.5× safety reserve. Pharmacist approves every dispatch.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-top"><h3>Initiate Transfer Request</h3></div>
+        <div class="form-row">
+          <div class="field"><label for="rPhc">Facility at Risk</label><select id="rPhc"></select></div>
+          <div class="field"><label for="rDrug">Medicine Required</label><select id="rDrug"></select></div>
+        </div>
+        <div class="btn-row"><button class="btn primary" id="btnAgent">Compute Nearest Surplus &amp; Route</button></div>
+        <div id="agentOut"></div>
+      </div>
+      <div class="card">
+        <div class="card-top"><h3>Active Transfer Manifest</h3></div>
+        <div class="route-box" id="routeBox">No active transfer planned — select a facility at risk to run solver.</div>
+      </div>
+    </div>
+    <div class="sheet">
+      <div class="sheet-hd">
+        <h3>Dispatch Decision Log</h3>
+        <span class="hint">audited · confirmation required</span>
+      </div>
+      <div id="agentLog"></div>
+    </div>
+  </section>
+
+  <!-- FEDERATED -->
+  <section class="view" id="v-federated" aria-label="Federated modelling">
+    <div class="pagehead">
+      <h2>Federated Learning Architecture</h2>
+      <p>State models train on local registers. Model weight gradients are aggregated centrally — raw patient records never leave the state.</p>
+    </div>
+    <div class="fed-grid" id="fedGrid"></div>
+    <div class="card">
+      <div class="card-top"><h3>National Aggregation — Round 39</h3></div>
+      <svg viewBox="0 0 900 150" style="width:100%;height:auto" role="img" aria-label="federated flow">
+        <line x1="120" y1="55" x2="450" y2="55" stroke="#d1d1d6"/>
+        <line x1="330" y1="105" x2="450" y2="55" stroke="#d1d1d6"/>
+        <line x1="660" y1="55" x2="780" y2="55" stroke="#1d1d1f" stroke-width="2"/>
+        <rect x="20" y="30" width="200" height="50" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="32" y="51" font-size="12" font-weight="700" font-family="Inter">Bihar · 142k rows</text>
+        <text x="32" y="67" font-size="11" fill="#6e6e73" font-family="Inter">acc 0.87 → +0.011</text>
+        <rect x="240" y="80" width="200" height="50" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="252" y="101" font-size="12" font-weight="700" font-family="Inter">Tamil Nadu · 210k rows</text>
+        <text x="252" y="117" font-size="11" fill="#6e6e73" font-family="Inter">acc 0.91 → +0.006</text>
+        <rect x="470" y="30" width="190" height="50" rx="10" fill="#1d1d1f"/>
+        <text x="484" y="51" font-size="12" fill="#fff" font-weight="700" font-family="Inter">National aggregator</text>
+        <text x="484" y="67" font-size="11" fill="#aeaeb2" font-family="Inter">FedAvg · BigQuery</text>
+        <rect x="690" y="30" width="190" height="50" rx="10" fill="#e9f2fd"/>
+        <text x="702" y="51" font-size="12" font-weight="700" font-family="Inter">Broadcast v39.2</text>
+        <text x="702" y="67" font-size="11" fill="#6e6e73" font-family="Inter">12 states updated</text>
+      </svg>
+      <p class="fineprint">Differential-privacy noise epsilon=2.1 applied prior to gradient transmission.</p>
+    </div>
+  </section>
+
+  <!-- SUPPLIER DEPOT / STATE MEDICAL SERVICES CORPORATION WAREHOUSE -->
+  <section class="view" id="v-depot" aria-label="Supplier Depot & State Medical Services Corporation">
+    <div class="pagehead">
+      <div>
+        <span class="kicker">State Medical Services Corporation (MSCL) · Central Reserve Depot</span>
+        <h2>Central Supplier Depot &amp; Consignment Dispatch</h2>
+        <p>Real-time visibility into state buffer reserves, automated emergency requisitions from distressed PHCs, cold-chain carrier dispatch, and in-transit consignment telematics.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn secondary sm" id="btnRefreshDepot">Refresh Depot Stock</button>
+      </div>
+    </div>
+
+    <!-- Depot Summary Strip -->
+    <div class="kpi-strip" style="margin-bottom:18px">
+      <div class="kpi-card">
+        <span class="kpi-label">Central Bulk Inventory</span>
+        <div class="kpi-val" id="depotTotalUnits">1,480,000</div>
+        <span class="kpi-sub">Units across essential catalog</span>
+      </div>
+      <div class="kpi-card alert-card has-alert" id="depotReqsCard">
+        <span class="kpi-label">Pending PHC Requisitions</span>
+        <div class="kpi-val" id="depotPendingReqsCount">3 Orders</div>
+        <span class="kpi-sub">Critical safety buffer breaches</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Active Consignments</span>
+        <div class="kpi-val" id="depotActiveTransitsCount">2 En Route</div>
+        <span class="kpi-sub">Cold-chain telematics active</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Avg. Dispatch Lead</span>
+        <div class="kpi-val">3.4h</div>
+        <span class="kpi-sub">District trunk routes</span>
+      </div>
+    </div>
+
+    <!-- Two-column grid: Pending Requisitions & Dispatch Console -->
+    <div class="grid2">
+      <!-- Left: Pending Emergency Requisitions -->
+      <div class="card">
+        <div class="card-top">
+          <h3>Emergency PHC Indents &amp; Purchase Requisitions</h3>
+          <span class="chip chip-critical" id="depotUrgentBadge">Action Required</span>
+        </div>
+        <p>Automated indent orders generated by the surveillance system when facility stock falls below 3 days of safety reserve.</p>
+        <div style="overflow-x:auto;max-height:360px">
+          <table class="ledger" id="depotReqsTable">
+            <thead>
+              <tr>
+                <th>Indent ID</th>
+                <th>Requesting PHC</th>
+                <th>Medicine</th>
+                <th>Req. Qty</th>
+                <th>Cover</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="depotReqsBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right: Dispatch Consignment Console -->
+      <div class="card">
+        <div class="card-top">
+          <h3>Issue Consignment &amp; Fleet Dispatch</h3>
+        </div>
+        <p>Authorize bulk release from state warehouse reserves and allocate a delivery fleet with real-time temperature tracking.</p>
+        
+        <div class="form-row">
+          <div class="field">
+            <label for="depotDestPhc">Recipient PHC</label>
+            <select id="depotDestPhc"></select>
+          </div>
+          <div class="field">
+            <label for="depotDrug">Medicine</label>
+            <select id="depotDrug"></select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="depotQty">Quantity to Dispatch (units)</label>
+            <input type="number" id="depotQty" value="2500" min="100" step="100">
+          </div>
+          <div class="field">
+            <label for="depotFleetType">Carrier &amp; Fleet Logistics</label>
+            <select id="depotFleetType">
+              <option value="cold_van" selected>Refrigerated Cold-Chain Van (2°C–8°C, IoT GPS)</option>
+              <option value="std_van">State Medical Logistics Freight Van (Dry cargo)</option>
+              <option value="express_drone">Emergency Aerial Delivery (Hilly/Flood Access)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="depotWaybill">Consignment Waybill / Challan #</label>
+            <input type="text" id="depotWaybill" value="DISPATCH-MSCL-9082">
+          </div>
+          <div class="field">
+            <label for="depotVehicle">Vehicle Reg / Driver Details</label>
+            <input type="text" id="depotVehicle" value="MP-09-GA-4412 (R. Sharma)">
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn primary" id="btnDispatchConsignment">Approve &amp; Dispatch Consignment</button>
+        </div>
+        <p class="fineprint">Directly debits central warehouse reserve, issues waybill, and notifies recipient PHC's Inward Log in real-time.</p>
+      </div>
+    </div>
+
+    <!-- Active In-Transit Consignments Table -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-top">
+        <h3>Active Dispatches in Transit (Live Telematics)</h3>
+      </div>
+      <p>Real-time transit monitoring of inter-district supply trucks with automated cold-chain excursion alarms.</p>
+      <div style="overflow-x:auto">
+        <table class="ledger" id="depotInTransitTable">
+          <thead>
+            <tr>
+              <th>Waybill #</th>
+              <th>Destination PHC</th>
+              <th>Medicine &amp; Qty</th>
+              <th>Carrier Fleet</th>
+              <th>Cold-Chain Sensor</th>
+              <th>ETA</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="depotInTransitBody">
+            <!-- Rendered via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section class="view" id="v-data" aria-label="Data">
+    <div class="pagehead">
+      <h2>Data Provenance &amp; Production Roadmap</h2>
+      <p>Prototype mirrors Indian public health data standards (data.gov.in) with drop-in Google Cloud integration points.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-top"><h3>Data Specifications</h3></div>
+        <p>Facility structures align with National Health Mission (NHM) standards; weather multipliers follow IMD district normals.</p>
+        <table class="ledger">
+          <tr><th>Entity</th><th>Fields</th></tr>
+          <tr><td>PHC Profile</td><td>id, name, state, district, lat, lng, beds, staff, footfall[14]</td></tr>
+          <tr><td>Drug Ledger</td><td>name, stock, safety level, daily burn, history[14]</td></tr>
+          <tr><td>Weather Anomaly</td><td>district anomaly index (-0.2 to +0.6)</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-top">
+          <h3>Google Cloud &amp; Backend Infrastructure</h3>
+          <span class="chip chip-steady">Production Architecture</span>
+        </div>
+        <p>Pre-wired integration points configured in <code>firebase-config.js</code> matching the official hackathon backend requirements.</p>
+        <table class="ledger">
+          <tr><th>Category</th><th>Google Service</th><th>Implementation in Swasthya</th></tr>
+          <tr>
+            <td><b>Firebase</b></td>
+            <td>Cloud Firestore &amp; Auth</td>
+            <td>Sub-100ms real-time multi-PHC ledger sync via <code>onSnapshot()</code> + ABDM Health Worker phone OTP login.</td>
+          </tr>
+          <tr>
+            <td><b>BigQuery</b></td>
+            <td>National Data Warehouse</td>
+            <td>Ingestion of national health metrics across 60 PHCs and central <code>FedAvg</code> federated model aggregation.</td>
+          </tr>
+          <tr>
+            <td><b>Cloud Run</b></td>
+            <td>Microservices &amp; Agents</td>
+            <td>Containerized Gemini 1.5 agent solver and OR-Tools optimization engine for nearest-surplus redistribution.</td>
+          </tr>
+          <tr>
+            <td><b>Cloud Functions</b></td>
+            <td>Event-Driven Automations</td>
+            <td>Triggers on stockout events to automatically dispatch Emergency Purchase Indents to the State Supplier Depot.</td>
+          </tr>
+          <tr>
+            <td><b>Google Maps</b></td>
+            <td>Routes API &amp; Telematics</td>
+            <td>Topography-aware cold-chain transit duration, road restrictions, and live carrier tracking under 250 km.</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <footer>
+      <b>Swasthya Operations Platform</b> — Operational prototype for Primary Health Centre resilience.
+      <span class="foot-sub"><span id="syncText">Live simulation mode active</span> · <span id="tickInfo">tick 0</span></span>
+    </footer>
+  </section>
+
+</main>
+
+<!-- QUICK UPDATE MODAL (Bottom Sheet on Mobile, Floating Dialog on Desktop) -->
+<div class="modal-backdrop" id="quickModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-sheet">
+    <div class="modal-drag-handle" aria-hidden="true"></div>
+    <div class="modal-head">
+      <div>
+        <span class="kicker">Direct Facility Adjustment</span>
+        <h3 id="modalTitle">Update Facility Stock</h3>
+        <p class="modal-sub" id="modalSub">—</p>
+      </div>
+      <button class="modal-close" id="btnCloseModal" aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label for="qmDrug">Select Medicine</label>
+          <select id="qmDrug"></select>
+        </div>
+        <div class="field">
+          <label for="qmStock">New Stock Count</label>
+          <input type="number" id="qmStock" placeholder="e.g. 1200">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="qmFootfall">OPD Footfall Today</label>
+          <input type="number" id="qmFootfall" placeholder="e.g. 140">
+        </div>
+        <div class="field">
+          <label for="qmStaff">Staff on Duty</label>
+          <input type="number" id="qmStaff" placeholder="e.g. 12">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn quiet" id="btnCancelModal">Cancel</button>
+      <button class="btn primary" id="btnSaveModal">Save &amp; Commit Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEALTH WORKER AUTHENTICATION MODAL -->
+<div class="modal-backdrop" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="modal-sheet">
+    <div class="modal-drag-handle" aria-hidden="true"></div>
+    <div class="modal-head">
+      <div>
+        <span class="kicker">National Health Mission · ABHA Portal</span>
+        <h3 id="authTitle">Health Worker Authentication</h3>
+        <p class="modal-sub">Secure credentials required for pharmaceutical ledger commits.</p>
+      </div>
+      <button class="modal-close" id="btnCloseAuthModal" aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="seg method-tabs" role="tablist" style="margin-bottom:14px">
+        <button class="method-tab active" data-auth-tab="demo" role="tab">Demo Profiles</button>
+        <button class="method-tab" data-auth-tab="phone" role="tab">Phone OTP</button>
+        <button class="method-tab" data-auth-tab="google" role="tab">Google Account</button>
+      </div>
+
+      <!-- Demo Profiles (1-Click for Hackathon Judges) -->
+      <div class="auth-panel active" id="ap-demo">
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">One-click evaluation profiles for hackathon judges and evaluators:</p>
+        <div class="demo-profile-list">
+          <div class="demo-profile-card" data-role="pharmacist" data-name="Dr. Ananya Sen" data-title="Duty Pharmacist" data-avatar="AS" data-abha="91-4821-3901-22" data-facility="PHC-001 (Sadar PHC, Gaya)">
+            <div class="dpc-avatar">AS</div>
+            <div class="dpc-info">
+              <b>Dr. Ananya Sen</b>
+              <span>Duty Pharmacist · Sadar PHC, Gaya</span>
+              <small>ABHA ID: 91-4821-3901-22</small>
+            </div>
+            <button class="btn sm primary btn-login-as">Sign In</button>
+          </div>
+
+          <div class="demo-profile-card" data-role="officer" data-name="Dr. K. V. Raman" data-title="District Medical Officer" data-avatar="KR" data-abha="91-1102-8840-77" data-facility="District Health Office, Gaya">
+            <div class="dpc-avatar">KR</div>
+            <div class="dpc-info">
+              <b>Dr. K. V. Raman</b>
+              <span>District Medical Officer · Oversight &amp; Transfers</span>
+              <small>ABHA ID: 91-1102-8840-77</small>
+            </div>
+            <button class="btn sm quiet btn-login-as">Sign In</button>
+          </div>
+
+          <div class="demo-profile-card" data-role="depot" data-name="M. Suresh" data-title="State Depot Dispatcher" data-avatar="MS" data-abha="CMS-LOG-44" data-facility="Central Medical Store, Patna">
+            <div class="dpc-avatar">MS</div>
+            <div class="dpc-info">
+              <b>M. Suresh</b>
+              <span>State Depot Dispatcher · Central Medical Stores</span>
+              <small>Logistics ID: CMS-LOG-44</small>
+            </div>
+            <button class="btn sm quiet btn-login-as">Sign In</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phone OTP (Real World Standard for Indian Health Workers) -->
+      <div class="auth-panel" id="ap-phone">
+        <div id="otpStep1">
+          <div class="form-row">
+            <div class="field">
+              <label for="authPhone">Mobile Number (Registered with NHM)</label>
+              <input type="text" id="authPhone" placeholder="+91 98765 43210" maxlength="15">
+            </div>
+            <div class="field">
+              <label for="authRoleSelect">Role</label>
+              <select id="authRoleSelect">
+                <option value="pharmacist">PHC Duty Pharmacist</option>
+                <option value="officer">District Health Officer</option>
+                <option value="depot">Central Warehouse Officer</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="btnSendOtp">Send Verification Code</button>
+          </div>
+          <p class="fineprint">Simulates SMS gateway verification via Firebase Phone Auth.</p>
+        </div>
+
+        <div id="otpStep2" style="display:none">
+          <div class="field" style="margin-bottom:12px">
+            <label for="authOtp">Enter 6-Digit Code sent to your mobile</label>
+            <input type="text" id="authOtp" placeholder="123456" maxlength="6" style="letter-spacing:4px;font-weight:700;font-size:16px;text-align:center">
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="btnVerifyOtp">Verify &amp; Sign In</button>
+            <button class="btn quiet" id="btnResendOtp">Resend</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Google Sign In -->
+      <div class="auth-panel" id="ap-google">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Sign in with an authorized Google Workspace / Health Department account:</p>
+        <button class="google-sign-in-btn" id="btnGoogleAuth">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/>
+            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
+          </svg>
+          <span>Continue with Google Health ID</span>
+        </button>
+        <p class="fineprint">Integrates with Firebase Auth Google Provider for federated enterprise health accounts.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- SYSTEM SETTINGS & GOOGLE AI API MODAL -->
+<div class="modal-backdrop" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal-sheet" style="max-width:620px">
+    <div class="modal-drag-handle" aria-hidden="true"></div>
+    <div class="modal-head">
+      <div>
+        <span class="kicker">System Configuration</span>
+        <h3 id="settingsTitle">API Keys &amp; Data Calibration</h3>
+        <p class="modal-sub">Configure live Google Gemini API connectivity and inspect data calibration sources.</p>
+      </div>
+      <button class="modal-close" id="btnCloseSettingsModal" aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body" style="max-height:75vh;overflow-y:auto">
+      <!-- Gemini API Key Section -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-top">
+          <h4>Google Gemini API Key</h4>
+          <span class="chip" id="apiKeyStatusBadge">Offline Simulation Mode</span>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted)">Paste your Google AI Studio API key (<code>AIzaSy...</code>) to enable live LLM reasoning for voice transcription and autonomous redistribution. If left empty, the system uses high-fidelity offline simulation.</p>
+        <div class="field" style="margin:10px 0">
+          <label for="geminiApiKeyInput">Gemini API Key</label>
+          <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." autocomplete="off">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btnSaveApiKey">Save API Key</button>
+          <button class="btn quiet sm" id="btnClearApiKey">Clear Key</button>
+        </div>
+      </div>
+
+      <!-- Data Provenance Section -->
+      <div class="card">
+        <div class="card-top">
+          <h4>Calibrated Public Health Datasets</h4>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Baseline simulation parameters and facility metrics are calibrated from official Indian government and multilateral health standards:</p>
+        <div class="tech-item" style="padding:8px 0;border-bottom:1px solid var(--line)">
+          <b>data.gov.in &amp; HMIS (Ministry of Health &amp; Family Welfare)</b>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Monthly outpatient department (OPD) footfall norms and seasonal consumption profiles across rural health facilities.</p>
+        </div>
+        <div class="tech-item" style="padding:8px 0;border-bottom:1px solid var(--line)">
+          <b>Indian Public Health Standards (IPHS 2022 Guidelines)</b>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Bed capacity norms (6–10 beds per PHC), sanctioned medical officer and nurse ratios, and cold-chain equipment requirements.</p>
+        </div>
+        <div class="tech-item" style="padding:8px 0;border-bottom:1px solid var(--line)">
+          <b>National List of Essential Medicines (NLEM India)</b>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Formulary categorization covering maternal oxytocics, essential antimicrobials, oral rehydration salts, and chronic therapeutics.</p>
+        </div>
+        <div class="tech-item" style="padding:8px 0">
+          <b>India Meteorological Department (IMD District Normals)</b>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">District-level climate and monsoon anomaly factors driving seasonal fever, gastrointestinal, and respiratory disease spikes.</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary" id="btnCloseSettingsFoot">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Firebase Official SDKs (Auth, Firestore, App) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
