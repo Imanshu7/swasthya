@@ -1,0 +1,37 @@
+{
+  "hosting": {
+    "target": "swasthya-anantvyom",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      ".firebaserc",
+      "serviceAccountKey.json",
+      "server.py",
+      "migrate_to_firebase.py",
+      "swasthya.db",
+      "*.log",
+      ".env",
+      ".env.*",
+      "__pycache__/**",
+      "*.pyc",
+      "node_modules/**",
+      ".git/**",
+      ".gitignore",
+      "DESIGN_PLAN.md",
+      "README.md",
+      "public/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

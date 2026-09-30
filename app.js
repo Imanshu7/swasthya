@@ -70,6 +70,16 @@ async function apiPost(path, body){
   }
 }
 
+function fsWrite(writes){
+  if(!_fsDb) return;
+  const batch = _fsDb.batch();
+  writes.forEach(({col, doc, data, merge}) => {
+    const ref = _fsDb.collection(col).doc(doc);
+    batch.set(ref, data, {merge: !!merge});
+  });
+  batch.commit().catch(e => console.warn('[firestore] write failed', e));
+}
+
 function setSyncLabel(){
   const tag = API ? 'Cloud' : LIVE.mode==='firebase' ? 'Firebase' : hasMaps ? 'Maps' : 'Offline';
   const st = $('syncTag');
@@ -127,12 +137,13 @@ const DRUGS = (window.FALLBACK_DRUGS) || [
   {key:'albendazole', name:'Albendazole 400mg', safety:600, per:5.0},
 ];
 
-// Facilities inventory array — populated live from backend API, or local fallback when offline
+// Facilities inventory — seeded from offline fallback, overwritten by Firestore on load
 let PHCS = (typeof window.getOfflineFallbackFacilities === 'function')
   ? window.getOfflineFallbackFacilities()
   : [];
 let writesCount = 0;
 let auditedLogEntries = [];
+let _fsDb = null;
 
 // Inventory burn rate and coverage forecast calculations
 function avg(a){ return (a && a.length) ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
@@ -1139,7 +1150,10 @@ $('btnCommitInward').onclick = () => {
   logAuditWrite(`${activeOperator.name} · Inward Consignment`, `${challan} from ${source}: Received ${qty.toLocaleString('en-IN')} units of ${m?.name||dk} @ ${p.id}. Temp verified: ${temp}.`);
   toast(`Consignment Accepted: +${qty.toLocaleString('en-IN')}u`, `${m?.name} credited to ${p.district} · Challan ${challan}`);
   broadcastLedgerChange('INWARD_SUPPLY', { id: p.id, drug: dk, qty, challan });
-  if(API) apiPost(`/api/phcs/${p.id}/update`, { drug: dk, stock: m?.stock, actor: activeOperator.name, note: `Inward delivery ${challan} (+${qty}u)` });
+  fsWrite([
+    { col:'meds', doc:`${p.id}_${dk}`, data:{ stock: m?.stock }, merge:true },
+    { col:'audit_logs', doc:`audit-${Date.now()}`, data:{ actor: activeOperator.name, action:'INWARD_SUPPLY', details:`${p.id}: Inward delivery ${challan} (+${qty}u)`, timestamp: new Date().toISOString() }, merge:false }
+  ]);
 
   $('inwardQty').value = '';
   $('inwardChallan').value = '';
@@ -1211,7 +1225,10 @@ function initManualOverhaul(){
     logAuditWrite(`${activeOperator.name} (Manual Overhaul)`, `Updated ${p.id} (${p.district}): ${m?.name||dk}=${m?.stock||'—'}u, burn=${m?.per||'—'}/d, beds=${p.bedsOccupied}/${p.bedsTotal}, staff=${p.staffPresent}/${p.staffTotal}, footfall=${p.footfallToday}, cold=${p.coldTemp}°C. Note: ${notes}`);
     toast('Facility Overhaul Committed', `${p.name} updated · Note: ${notes}`);
     broadcastLedgerChange('MANUAL_OVERHAUL', { id: p.id, phc: p });
-    if(API) apiPost(`/api/phcs/${p.id}/update`, { drug: dk, stock: m?.stock, footfallToday: p.footfallToday, bedsOccupied: p.bedsOccupied, staffPresent: p.staffPresent, coldTemp: p.coldTemp, actor: activeOperator.name, note: notes });
+    fsWrite([
+      { col:'phcs', doc:p.id, data:{ footfall_today: p.footfallToday, beds_occupied: p.bedsOccupied, staff_present: p.staffPresent, cold_temp: p.coldTemp }, merge:true },
+      { col:'meds', doc:`${p.id}_${dk}`, data:{ stock: m?.stock }, merge:true }
+    ]);
 
     refreshAll();
     syncPortalFacility(p.id);
@@ -1508,7 +1525,7 @@ function applyUpdate(id, p, src){
   logAuditWrite(`${activeOperator.name} via ${src}`, `${id} updated. Staff=${p.attendance??'—'} Foot=${p.footfall??'—'} Drug=${p.drug?p.drug.name+'='+p.drug.qty:'—'}`);
   toast(`Record Updated — ${id}`, `${src} · attn ${p.attendance??'—'} · footfall ${p.footfall??'—'}${p.drug?' · '+p.drug.name+' = '+p.drug.qty:''}${API?' · synced':''}`);
 
-  if(API) apiPost('/writes',{id,update:p,src,operator:activeOperator,ts:Date.now()});
+  fsWrite([{ col:'audit_logs', doc:Date.now().toString(), data:{ actor: activeOperator.name, action:'FIELD_UPDATE', details:`${id} updated via ${src}`, timestamp: new Date().toISOString() }, merge:false }]);
   refreshAll();
   selectRecord(id, false);
 }
@@ -1696,7 +1713,11 @@ function runAgent(){
       playSound('chime');
       logAuditWrite(`${activeOperator.name} · Transfer Agent`, `Transfer Confirmed: ${qty.toLocaleString('en-IN')}u of ${dk} from ${best.p.id} to ${id}.`);
       toast(`Transfer confirmed — ${qty.toLocaleString('en-IN')}u`, `${best.p.district} → ${need.district} · ETA ${eta}h${API?' · synced':''}`);
-      if(API) apiPost('/transfers/confirm',{from:best.p.id,to:id,drug:dk,qty,ts:Date.now()});
+      fsWrite([
+        { col:'meds', doc:`${best.p.id}_${dk}`, data:{ stock: best.m.stock }, merge:true },
+        { col:'meds', doc:`${id}_${dk}`, data:{ stock: mNeed.stock }, merge:true },
+        { col:'transfers', doc:`TX-${Date.now()}`, data:{ from_phc: best.p.id, to_phc: id, drug: dk, qty, timestamp: new Date().toISOString(), status:'DISPATCHED' }, merge:false }
+      ]);
       broadcastLedgerChange('TRANSFER_CONFIRM', { from: best.p.id, to: id, drug: dk, qty });
       lastRoute=null;
       updatePaneMap(false);
@@ -1809,7 +1830,6 @@ function startFirebase(){
       });
     }
 
-    // Real Firebase Auth listener for persistent verified sessions
     if(firebase.auth){
       firebase.auth().onAuthStateChanged(user => {
         if(user){
@@ -1827,17 +1847,66 @@ function startFirebase(){
       });
     }
 
-    if(firebase.firestore){
-      firebase.firestore().collection('phcs').onSnapshot(snap=>{
-        if(snap.empty) return;
-        snap.docs.forEach(d=>{
-          const inc=d.data();
-          const p=PHCS.find(x=>x.id===(inc.id||d.id));
-          if(p) Object.assign(p,inc,{id:p.id});
-        });
-        LIVE.mode='firebase'; setSyncLabel(); refreshAll();
-      }, err=>console.warn('[live] firestore note:', err.message));
-    }
+    if(!firebase.firestore) return;
+    _fsDb = firebase.firestore();
+
+    // Initial full load from Firestore
+    Promise.all([
+      _fsDb.collection('phcs').get(),
+      _fsDb.collection('meds').get()
+    ]).then(([phcSnap, medSnap]) => {
+      if(phcSnap.empty) return;
+
+      const medsMap = {};
+      medSnap.docs.forEach(d => {
+        const m = d.data();
+        if(!medsMap[m.phc_id]) medsMap[m.phc_id] = [];
+        if(typeof m.history === 'string') m.history = JSON.parse(m.history);
+        medsMap[m.phc_id].push(m);
+      });
+
+      const loaded = phcSnap.docs.map(d => {
+        const p = d.data();
+        if(typeof p.footfall_hist === 'string') p.footfall_hist = JSON.parse(p.footfall_hist);
+        p.footfallHist = p.footfall_hist || p.footfallHist || [];
+        p.bedsTotal    = p.beds_total    ?? p.bedsTotal    ?? 10;
+        p.bedsOccupied = p.beds_occupied ?? p.bedsOccupied ?? 6;
+        p.staffTotal   = p.staff_total   ?? p.staffTotal   ?? 12;
+        p.staffPresent = p.staff_present ?? p.staffPresent ?? 8;
+        p.footfallToday = p.footfall_today ?? p.footfallToday ?? 100;
+        p.coldTemp     = p.cold_temp     ?? p.coldTemp     ?? 4.0;
+        p.meds = medsMap[p.id] || p.meds || [];
+        return p;
+      });
+
+      if(loaded.length) {
+        PHCS = loaded;
+        const states=[...new Set(PHCS.map(p=>p.state))].sort();
+        $('fState').innerHTML='<option value="">All states</option>'+states.map(s=>`<option>${s}</option>`).join('');
+        const opts=PHCS.map(p=>`<option value="${p.id}">${p.id} · ${p.name}, ${p.district}</option>`).join('');
+        ['voicePhc','rPhc','portalPhcSelect','vitPhc','depotDestPhc'].forEach(id=>{ if($(id)) $(id).innerHTML=opts; });
+        $('rPhc').value=PHCS.find(p=>riskOf(worstCover(p).days)==='critical')?.id||PHCS[0].id;
+        refreshAll();
+        const worst=PHCS.map(p=>({p,w:worstCover(p)})).sort((a,b)=>a.w.days-b.w.days)[0];
+        if(worst){ selectRecord(worst.p.id, false); syncPortalFacility(worst.p.id); }
+        LIVE.mode='firebase'; setSyncLabel();
+        toast('Firestore Connected', `Loaded ${loaded.length} PHC facility records from cloud`);
+      }
+    }).catch(e => console.warn('[firestore] initial load failed, using offline cache', e));
+
+    // Realtime listener for live updates after initial load
+    _fsDb.collection('phcs').onSnapshot(snap => {
+      if(snap.empty) return;
+      snap.docChanges().forEach(change => {
+        if(change.type === 'modified') {
+          const inc = change.doc.data();
+          const p = PHCS.find(x => x.id === (inc.id || change.doc.id));
+          if(p) Object.assign(p, inc, {id: p.id});
+        }
+      });
+      refreshAll();
+    }, err => console.warn('[firestore] snapshot error', err.message));
+
     LIVE.mode='firebase'; setSyncLabel();
   }catch(e){ console.warn('[live] firebase init failed', e); }
 }
@@ -2033,25 +2102,7 @@ function initInfoPopovers(){
   setSyncLabel();
   bindFirebase();
 
-  // Load live facility ledgers from backend if connected
-  if(API){
-    fetch(API + '/api/phcs')
-      .then(res => res.json())
-      .then(data => {
-        if(data && Array.isArray(data) && data.length){
-          PHCS = data;
-          refreshAll();
-          selectRecord(PHCS[0].id, false);
-          syncPortalFacility(PHCS[0].id);
-          setSyncLabel();
-          toast('Cloud Connected', 'Loaded 60 facility inventories from database');
-        }
-      })
-      .catch(err => {
-        console.info('[Network] Cloud server offline — local cache active');
-        setSyncLabel();
-      });
-  }
+  // Firestore load is handled inside startFirebase() / bindFirebase() above
 
   const worst0=PHCS.map(p=>({p,w:worstCover(p)})).sort((a,b)=>a.w.days-b.w.days)[0];
   if(worst0){
