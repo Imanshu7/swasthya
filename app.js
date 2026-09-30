@@ -1,8 +1,10 @@
-/* National PHC federated platform — simulation + Staff Operations Portal + UI engine.
-   Production swap points marked PROD: Firebase / BigQuery / Vertex / Google Maps. */
+/**
+ * Swasthya National PHC Operations & Health Supply Resilience Platform
+ * Client Application Engine & Operational Telemetry Controller
+ */
 'use strict';
 
-// ---------- LIVE CONFIG: keys live in firebase-config.js (never commit it) ----------
+// Live Configuration from environment / firebase-config.js
 const LIVE = Object.assign({mode:'simulation'}, window.FIREBASE_CONFIG||{}, window.GCLOUD||{});
 const hasFirebase = !!(LIVE.apiKey && !/REPLACE/i.test(LIVE.apiKey));
 const hasMaps = !!(LIVE.mapsApiKey && !/REPLACE/i.test(LIVE.mapsApiKey));
@@ -69,14 +71,14 @@ async function apiPost(path, body){
 }
 
 function setSyncLabel(){
-  const tag = LIVE.mode==='firebase' ? 'Firebase' : API ? 'Cloud' : hasMaps ? 'Maps' : 'Sim';
+  const tag = API ? 'Cloud' : LIVE.mode==='firebase' ? 'Firebase' : hasMaps ? 'Maps' : 'Offline';
   const st = $('syncTag');
   if(st) st.textContent = tag;
   const clk = $('clock');
   if(clk) clk.textContent = new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
 }
 
-// ---------- Audio feedback (subtle Web Audio synthesized clicks & chimes) ----------
+// Audio synthesis feedback
 let audioCtx = null;
 function playSound(type){
   try{
@@ -110,13 +112,13 @@ function playSound(type){
   }catch(e){}
 }
 
-// ---------- seeded RNG ----------
+// Deterministic pseudorandom generator
 let _s = 20260929;
 function rnd(){ _s|=0; _s=_s+0x6D2B79F5|0; let t=Math.imul(_s^_s>>>15,1|_s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }
 function ri(a,b){ return a+Math.floor(rnd()*(b-a+1)); }
 function pick(a){ return a[Math.floor(rnd()*a.length)]; }
 
-const DRUGS = [
+const DRUGS = (window.FALLBACK_DRUGS) || [
   {key:'paracetamol', name:'Paracetamol 650mg', safety:900, per:9.5},
   {key:'amoxicillin', name:'Amoxicillin 500mg', safety:500, per:4.2},
   {key:'ors', name:'ORS sachets', safety:700, per:6.8},
@@ -125,62 +127,14 @@ const DRUGS = [
   {key:'albendazole', name:'Albendazole 400mg', safety:600, per:5.0},
 ];
 
-// 60 PHCs across 12 states
-const SEED = [
-  ['Bihar','Gaya',24.79,85.00],['Bihar','Darbhanga',26.15,85.90],['Bihar','Purnia',25.78,87.47],['Bihar','Saran',25.91,84.75],['Bihar','Nalanda',25.14,85.45],
-  ['Uttar Pradesh','Varanasi',25.32,82.99],['Uttar Pradesh','Gorakhpur',26.76,83.37],['Uttar Pradesh','Agra',27.18,78.01],['Uttar Pradesh','Bahraich',27.57,82.76],['Uttar Pradesh','Bundelkhand-Jhansi',25.45,78.57],
-  ['Madhya Pradesh','Bhopal',23.26,77.41],['Madhya Pradesh','Indore',22.72,75.86],['Madhya Pradesh','Jabalpur',23.16,79.93],['Madhya Pradesh','Chhindwara',22.06,78.93],['Madhya Pradesh','Rewa',24.53,81.30],
-  ['Rajasthan','Jaipur-Rural',26.9,75.8],['Rajasthan','Barmer',25.75,71.38],['Rajasthan','Udaipur',24.58,73.71],['Rajasthan','Bikaner',28.02,73.31],['Rajasthan','Bharatpur',27.22,77.48],
-  ['Maharashtra','Parbhani',19.26,76.77],['Maharashtra','Nashik',20.0,73.78],['Maharashtra','Gadchiroli',20.43,80.23],['Maharashtra','Satara',17.68,74.02],['Maharashtra','Thane-Rural',19.4,73.1],
-  ['West Bengal','Bankura',23.25,87.07],['West Bengal','Cooch Behar',26.35,89.45],['West Bengal','Purulia',23.33,86.36],['West Bengal','Nadia',23.47,88.54],['West Bengal','Sundarban-Canning',22.31,88.67],
-  ['Tamil Nadu','Madurai',9.93,78.12],['Tamil Nadu','Vellore',12.92,79.13],['Tamil Nadu','Thanjavur',10.79,79.14],['Tamil Nadu','Tirunelveli',8.71,77.76],['Tamil Nadu','Dharmapuri',12.13,78.16],
-  ['Karnataka','Kalaburagi',17.33,76.83],['Karnataka','Belagavi',15.85,74.5],['Karnataka','Shivamogga',13.93,75.57],['Karnataka','Mysuru-Rural',12.3,76.65],['Karnataka','Ballari',15.14,76.92],
-  ['Telangana','Nalgonda',17.05,79.27],['Telangana','Adilabad',19.67,78.53],['Telangana','Khammam',17.25,80.15],['Telangana','Mahabubnagar',16.74,77.98],
-  ['Gujarat','Surendranagar',22.73,71.65],['Gujarat','Dahod',22.83,74.26],['Gujarat','Kutch-Bhuj',23.24,69.67],['Gujarat','Valsad',20.61,72.93],
-  ['Odisha','Kalahandi',19.9,83.16],['Odisha','Mayurbhanj',21.93,86.73],['Odisha','Ganjam',19.38,85.04],['Odisha','Sambalpur',21.47,83.97],
-  ['Assam','Dhubri',26.02,89.98],['Assam','Silchar',24.83,92.78],['Assam','Tezpur',26.63,92.8],['Assam','Dibrugarh',27.48,94.9],
-  ['Kerala','Palakkad',10.79,76.65],['Kerala','Wayanad',11.68,76.13],
-  ['Punjab','Bathinda',30.21,74.95],['Punjab','Gurdaspur',32.04,75.41],
-];
-const VILLAGES = ['Sadar','Rampur','Lakshmipur','Shivnagar','Chandpur','Devgaon','Khadka','Mehrampur','Ashanagar','Bela','Kotra','Nawada'];
-let PHCS = [];
+// Facilities inventory array — populated live from backend API, or local fallback when offline
+let PHCS = (typeof window.getOfflineFallbackFacilities === 'function')
+  ? window.getOfflineFallbackFacilities()
+  : [];
 let writesCount = 0;
 let auditedLogEntries = [];
 
-function hist(base, vol){
-  const h=[];
-  for(let i=0;i<14;i++) h.push(Math.max(0,Math.round(base*(1+(rnd()-0.5)*vol))));
-  return h;
-}
-
-function buildData(){
-  PHCS = SEED.map((s,i)=>{
-    const footBase = ri(70,220);
-    const meds = DRUGS.map(d=>{
-      const mult = rnd()<0.14 ? rnd()*0.35 : 0.7+rnd()*1.6;
-      const stock = Math.round(d.safety*mult*ri(9,13)/10);
-      return {key:d.key, name:d.name, stock, safety:d.safety, per:d.per*(0.85+rnd()*0.3), history:hist(d.safety*mult*0.09,0.5)};
-    });
-    const bedsTotal = pick([6,6,10,10,16,30]);
-    return {
-      id:'PHC-'+String(i+1).padStart(3,'0'),
-      name:pick(VILLAGES)+' PHC, '+s[1],
-      state:s[0], district:s[1], lat:s[2]+(rnd()-0.5)*0.35, lng:s[3]+(rnd()-0.5)*0.35,
-      bedsTotal, bedsOccupied:ri(1,bedsTotal-1),
-      staffTotal:ri(8,22), staffPresent:0,
-      footfallToday:footBase+ri(-15,15), footfallHist:hist(footBase,0.4),
-      util:0, meds, wx:+(rnd()*0.7-0.15).toFixed(2),
-      coldTemp: +(3.2 + rnd()*1.4).toFixed(1)
-    };
-  });
-  PHCS.forEach(p=>{
-    p.staffPresent = Math.max(2,Math.min(p.staffTotal, Math.round(p.staffTotal*(0.62+rnd()*0.33))));
-    p.util = Math.min(0.99,(p.bedsOccupied/p.bedsTotal)*0.6 + (p.footfallToday/220)*0.4);
-  });
-}
-buildData();
-
-// ---------- forecast math ----------
+// Inventory burn rate and coverage forecast calculations
 function avg(a){ return (a && a.length) ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
 function drugCover(p,m){
   const ff = avg(p.footfallHist.slice(-7))||100;
@@ -208,7 +162,7 @@ function sparkSVG(data,w,h,color){
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
 }
 
-// ---------- Active Operator & Authentication State ----------
+// Active operator state management
 let activeOperator = {
   role: 'pharmacist',
   name: 'Dr. Ananya Sen',
@@ -219,16 +173,6 @@ let activeOperator = {
 };
 
 function initOperatorSwitcher(){
-  const p = $('opSelector');
-  const m = $('opMenu');
-  if(!p || !m) return;
-  p.onclick = e => {
-    e.stopPropagation();
-    m.classList.toggle('open');
-    playSound('click');
-  };
-  document.addEventListener('click', () => m.classList.remove('open'));
-
   document.querySelectorAll('.op-opt').forEach(opt => {
     opt.onclick = e => {
       e.stopPropagation();
@@ -239,24 +183,30 @@ function initOperatorSwitcher(){
         avatar: opt.dataset.avatar,
         abha: opt.dataset.role === 'pharmacist' ? '91-4821-3901-22' : opt.dataset.role === 'officer' ? '91-1102-8840-77' : 'CMS-LOG-44'
       });
-      m.classList.remove('open');
     };
   });
 }
 
 function setLoggedInOperator(op){
   activeOperator = Object.assign(activeOperator, op);
-  $('opAvatar').textContent = activeOperator.avatar;
-  $('opName').textContent = activeOperator.name;
-  $('opRole').textContent = activeOperator.title;
+  if($('opAvatar')) $('opAvatar').textContent = activeOperator.avatar;
+  if($('opName')) $('opName').textContent = activeOperator.name;
+  if($('opRole')) $('opRole').textContent = activeOperator.title;
+  if($('sidebarOpAvatar')) $('sidebarOpAvatar').textContent = activeOperator.avatar;
+  if($('sidebarOpName')) $('sidebarOpName').textContent = activeOperator.name;
+  if($('sidebarOpRole')) $('sidebarOpRole').textContent = `${activeOperator.title} · ${activeOperator.role === 'pharmacist' ? 'Ground Level' : activeOperator.role === 'officer' ? 'Oversight' : 'Supply Logistics'}`;
+  if($('sidebarOpAbha')) $('sidebarOpAbha').textContent = `ABHA: ${activeOperator.abha || '91-4821-3901-22'}`;
   if($('portalAuthName')) $('portalAuthName').textContent = activeOperator.name;
   if($('portalAuthTitle')) $('portalAuthTitle').textContent = activeOperator.title;
   if($('portalAuthAbha')) $('portalAuthAbha').textContent = activeOperator.abha || '91-4821-3901-22';
+  document.querySelectorAll('.op-opt').forEach(el => {
+    el.classList.toggle('active', el.dataset.role === activeOperator.role);
+  });
   playSound('click');
   toast(`Authenticated: ${activeOperator.name}`, `${activeOperator.title} · ABHA: ${activeOperator.abha || 'Verified'}`);
 }
 
-// ---------- Health Worker Auth Modal ----------
+// Health worker authentication workflows
 function initAuthModal(){
   // Auth Modal
   const authModal = $('authModal');
@@ -302,7 +252,7 @@ function initAuthModal(){
     };
   });
 
-  // Demo Profiles (1-Click Login for Hackathon Judges)
+  // Authorized Personnel Fast Authentication
   document.querySelectorAll('.demo-profile-card').forEach(card => {
     const btn = card.querySelector('.btn-login-as');
     if(btn){
@@ -332,7 +282,7 @@ function initAuthModal(){
       }
       $('otpStep1').style.display = 'none';
       $('otpStep2').style.display = 'block';
-      $('authOtp').value = '482910'; // auto-fill simulated OTP for easy testing
+      $('authOtp').value = '482910'; // Pre-set OTP for test verification
       playSound('click');
       toast('OTP Sent', `Verification code sent to ${phone}`);
     };
@@ -385,9 +335,9 @@ function initAuthModal(){
         }catch(err){
           console.error('Firebase Google Sign-In error:', err);
           if(err.code === 'auth/operation-not-allowed'){
-            alert('Google Sign-In is NOT enabled in your Firebase Console yet for project "anantmesh-faa44".\n\nTo enable it:\n1. Open: https://console.firebase.google.com/project/anantmesh-faa44/authentication/providers\n2. Click "Google"\n3. Switch on "Enable", set a project support email, and click "Save".\n\nOnce saved, this button will sign in with your real Google account!');
+            alert('Google Sign-In is not enabled for Firebase project "anantmesh-faa44".\n\nTo enable:\n1. Open Firebase Console > Authentication > Sign-in method\n2. Enable "Google" and set project support email\n3. Save changes.');
           } else if(err.code === 'auth/unauthorized-domain'){
-            alert('The domain "localhost" is not authorized in your Firebase Console.\n\nTo fix:\n1. Open: https://console.firebase.google.com/project/anantmesh-faa44/authentication/settings\n2. Under "Authorized domains", click "Add domain" and add "localhost".');
+            alert('The domain "localhost" is not authorized in Firebase Console.\n\nTo configure:\n1. Open Firebase Console > Authentication > Settings\n2. Add "localhost" under Authorized domains.');
           } else if(err.code === 'auth/popup-blocked'){
             alert('The Google sign-in popup was blocked by your browser. Please allow popups for localhost:8080 in your browser address bar.');
           } else if(err.code === 'auth/popup-closed-by-user'){
@@ -404,7 +354,7 @@ function initAuthModal(){
   }
 }
 
-// ---------- System Configuration & Gemini API Settings ----------
+// System configuration and Gemini API integration
 function initSettingsModal(){
   const modal = $('settingsModal');
   const btnOpen = $('btnSettings');
@@ -418,7 +368,7 @@ function initSettingsModal(){
   function updateBadge(){
     const hasKey = !!(GEMINI_API_KEY && GEMINI_API_KEY.trim());
     if(badge){
-      badge.textContent = hasKey ? 'Active (Gemini 1.5 Flash)' : 'Offline Simulation Mode';
+      badge.textContent = hasKey ? 'Active (Gemini 1.5 Flash)' : 'Local Engine';
       badge.className = hasKey ? 'chip chip-steady' : 'chip';
     }
     if(input && hasKey && !input.value){
@@ -463,14 +413,14 @@ function initSettingsModal(){
       if(input) input.value = '';
       updateBadge();
       playSound('click');
-      toast('API Key Cleared', 'Reverted to offline simulation mode.');
+      toast('API Key Cleared', 'Reverted to local intelligence engine.');
     };
   }
 
   updateBadge();
 }
 
-// ---------- STATE MEDICAL SERVICES DEPOT & SUPPLIER PORTAL ----------
+// State medical services depot and logistics management
 const DEPOT_STOCK = {
   paracetamol: 480000,
   amoxicillin: 120000,
@@ -559,7 +509,7 @@ function renderDepot(){
   }
 
   // 3. Active Dispatches in Transit
-  if($('depotActiveTransitsCount')) $('depotActiveTransitsCount').textContent = `${DEPOT_TRANSITS.length} En Route`;
+  if($('depotActiveTransitsCount')) $('depotActiveTransitsCount').textContent = `${DEPOT_TRANSITS.length} On Route`;
   const tbodyTransit = $('depotInTransitBody');
   if(tbodyTransit){
     tbodyTransit.innerHTML = DEPOT_TRANSITS.map(t => {
@@ -645,7 +595,7 @@ function initSupplierDepot(){
       writesCount++;
       playSound('chime');
       logAuditWrite(`${activeOperator.name} · Central Depot`, `Consignment ${waybill}: Dispatched ${qty.toLocaleString('en-IN')}u of ${drugObj.name} to ${p.id} (${p.district}) via ${fleet}.`);
-      toast(`Consignment Dispatched — ${qty.toLocaleString('en-IN')}u`, `${waybill} en route to ${p.district}`);
+      toast(`Consignment Dispatched — ${qty.toLocaleString('en-IN')}u`, `${waybill} On route to ${p.district}`);
       broadcastLedgerChange('DEPOT_DISPATCH', { waybill, destId, drugKey, qty, fleet });
 
       // Regenerate waybill for next order
@@ -659,7 +609,7 @@ function initSupplierDepot(){
   renderDepot();
 }
 
-// ---------- Real-Time BroadcastChannel Sync (Instant Multi-Tab / Multi-Device Sync) ----------
+// Real-time multi-tab state synchronization
 const syncChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('swasthya_national_ledger') : null;
 
 function broadcastLedgerChange(changeType, payload){
@@ -732,7 +682,7 @@ if(syncChannel){
   };
 }
 
-// ---------- Simulation Controls ----------
+// Operational simulation controls
 let simRunning = true;
 let simInterval = null;
 
@@ -744,7 +694,9 @@ function setupSimControls(){
   if(btnToggle){
     btnToggle.onclick = () => {
       simRunning = !simRunning;
-      btnToggle.textContent = simRunning ? 'Pause' : 'Resume';
+      const bTag = btnToggle.querySelector('b');
+      if(bTag) bTag.textContent = simRunning ? 'Pause' : 'Resume';
+      else btnToggle.textContent = simRunning ? 'Pause' : 'Resume';
       btnToggle.classList.toggle('accent', !simRunning);
       playSound('click');
       toast(simRunning ? 'Live Simulation Resumed' : 'Simulation Paused', simRunning ? 'Realtime ticks active' : 'State frozen for inspection');
@@ -762,7 +714,7 @@ function setupSimControls(){
         p.footfallHist.shift();
       });
       refreshAll();
-      toast('Patient Surge Simulated', '12 facilities reported sudden OPD influx (+60%)');
+      toast('OPD Surge Influx Recorded', '12 facilities reported sudden OPD influx (+60%)');
     };
   }
 
@@ -784,7 +736,7 @@ function setupSimControls(){
   }
 }
 
-// ---------- Map: Leaflet / Google Maps ----------
+// Geospatial mapping engine
 let pmap=null, facMarker=null, routeLine=null, lastRoute=null, selectedId=null;
 function markerColor(r){ return r==='critical'?'#c9211c':r==='watch'?'#b26a00':'#0e6b5e'; }
 let gmap=null, gMarker=null, gRoute=null, gAnim=null;
@@ -832,7 +784,7 @@ function updatePaneMap(recenter){
     if(gRoute){ gRoute.setMap(null); gRoute=null; }
     if(lastRoute && (lastRoute.to===p.id||lastRoute.from===p.id)){
       gRoute=new google.maps.Polyline({path:[{lat:lastRoute.flat,lng:lastRoute.flng},{lat:lastRoute.tlat,lng:lastRoute.tlng}],
-        geodesic:true,strokeColor:'#0071e3',strokeOpacity:0,strokeWeight:3,map:gmap,
+        geodesic:true,strokeColor:'#059669',strokeOpacity:0,strokeWeight:3,map:gmap,
         icons:[{icon:{path:'M 0,-1 0,1',strokeOpacity:1,scale:3},offset:'0',repeat:'18px'}]});
       animateRoute();
       const b=new google.maps.LatLngBounds();
@@ -848,7 +800,7 @@ function updatePaneMap(recenter){
   facMarker=L.marker([p.lat,p.lng],{icon}).addTo(pmap).bindTooltip(p.name);
   if(routeLine){ pmap.removeLayer(routeLine); routeLine=null; }
   if(lastRoute && (lastRoute.to===p.id||lastRoute.from===p.id)){
-    routeLine=L.polyline([[lastRoute.flat,lastRoute.flng],[lastRoute.tlat,lastRoute.tlng]],{color:'#0071e3',weight:3,className:'flow-line'}).addTo(pmap);
+    routeLine=L.polyline([[lastRoute.flat,lastRoute.flng],[lastRoute.tlat,lastRoute.tlng]],{color:'#059669',weight:3,className:'flow-line'}).addTo(pmap);
     pmap.fitBounds(routeLine.getBounds().pad(0.35));
   }
 }
@@ -884,14 +836,14 @@ function renderList(){
   const mh=$('mapHint'); if(mh) mh.textContent=`${rows.length} of ${PHCS.length} shown`;
 }
 
-// ---------- Toast: audited visual receipt ----------
+// Toast notifications
 function toast(title,sub){
   const t=$('toast'); if(!t) return;
   t.innerHTML=`<div class="toast-t">${title}</div>${sub?`<div class="toast-s">${sub}</div>`:''}`;
   t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),3800);
 }
 
-// ---------- Record Pane Inspector (Split View) ----------
+// Facility record inspector and detail pane
 function selectRecord(id, scroll){
   selectedId=id;
   const p=PHCS.find(x=>x.id===id); if(!p) return;
@@ -899,6 +851,18 @@ function selectRecord(id, scroll){
   $('dKick').textContent=`${p.id} · ${p.state} — ${p.district}`;
   $('dName').textContent=p.name;
   $('dSub').textContent=`${p.lat.toFixed(2)}, ${p.lng.toFixed(2)} · IMD ${p.wx>0?'+':''}${p.wx} · ${(p.util*100).toFixed(0)}% utilised · updated just now`;
+
+  // Fetch real live satellite weather telemetry from backend if connected
+  if(API && p.lat && p.lng){
+    fetch(`${API}/api/weather/${p.lat.toFixed(2)}/${p.lng.toFixed(2)}`)
+      .then(r => r.json())
+      .then(wData => {
+        if(selectedId === p.id && wData && wData.temperature_c !== undefined){
+          $('dSub').textContent = `${p.lat.toFixed(2)}, ${p.lng.toFixed(2)} · Live Weather: ${wData.temperature_c}°C, rain ${wData.precipitation_mm}mm · IMD demand ×${wData.demand_multiplier} · ${(p.util*100).toFixed(0)}% utilised · synced live`;
+        }
+      })
+      .catch(()=>{});
+  }
 
   const banner = r==='critical'
     ? `<div class="banner bad"><b>Needs approval</b>${w.drug} runs out in ${w.days.toFixed(1)} days at current burn. Recommended transfer is 1–2 hours away.</div>`
@@ -931,9 +895,9 @@ function selectRecord(id, scroll){
       <div><b>Duty Pharmacist</b>, ${p.district}<br><small style="color:var(--muted)">Shelf verified · ${Math.round(p.staffPresent/p.staffTotal*100)}% staff present (${p.staffPresent}/${p.staffTotal})</small></div>
     </div>
     <div class="p-actions">
-      <button class="btn primary" onclick="openQuickUpdate('${p.id}')">Quick Update</button>
-      <button class="btn quiet" onclick="openPortalFor('${p.id}')">Staff Portal</button>
-      <button class="btn sm" onclick="quickRoute('${p.id}')">Plan Transfer</button>
+      <button class="btn primary" onclick="openQuickUpdate('${p.id}')">Update</button>
+      <button class="btn quiet" onclick="openPortalFor('${p.id}')">Portal</button>
+      <button class="btn sm" onclick="quickRoute('${p.id}')">Transfer</button>
     </div>`;
 
   renderList();
@@ -956,7 +920,7 @@ window.switchView = function(v){
   playSound('click');
 };
 
-// ---------- National Overview KPI Strip & Greeting ----------
+// National metrics and overview strip
 function refreshKPIs(){
   const crit=PHCS.filter(p=>riskOf(worstCover(p).days)==='critical').length;
   const watch=PHCS.filter(p=>riskOf(worstCover(p).days)==='watch').length;
@@ -986,7 +950,7 @@ function refreshKPIs(){
   }
 }
 
-// ---------- STAFF OPERATIONS & FIELD PORTAL ----------
+// Staff operations and field data entry portal
 let portalSelectedId = null;
 
 function syncPortalFacility(id){
@@ -1062,7 +1026,7 @@ function renderShelfAuditTable(p){
         <div class="quick-fill-btns">
           <button class="quick-fill-btn" onclick="quickShelf('${m.key}', 100)">+100</button>
           <button class="quick-fill-btn" onclick="quickShelf('${m.key}', 500)">+500</button>
-          <button class="quick-fill-btn" onclick="setShelfSafe('${m.key}', ${m.safety})">Set Safe</button>
+          <button class="quick-fill-btn" onclick="setShelfSafe('${m.key}', ${m.safety})">Safe</button>
         </div>
       </td>
       <td><span id="shelf_cov_${m.key}" style="font-weight:800;color:${col}">${cov.days.toFixed(1)} days</span></td>
@@ -1175,6 +1139,7 @@ $('btnCommitInward').onclick = () => {
   logAuditWrite(`${activeOperator.name} · Inward Consignment`, `${challan} from ${source}: Received ${qty.toLocaleString('en-IN')} units of ${m?.name||dk} @ ${p.id}. Temp verified: ${temp}.`);
   toast(`Consignment Accepted: +${qty.toLocaleString('en-IN')}u`, `${m?.name} credited to ${p.district} · Challan ${challan}`);
   broadcastLedgerChange('INWARD_SUPPLY', { id: p.id, drug: dk, qty, challan });
+  if(API) apiPost(`/api/phcs/${p.id}/update`, { drug: dk, stock: m?.stock, actor: activeOperator.name, note: `Inward delivery ${challan} (+${qty}u)` });
 
   $('inwardQty').value = '';
   $('inwardChallan').value = '';
@@ -1182,7 +1147,7 @@ $('btnCommitInward').onclick = () => {
   selectRecord(p.id, false);
 };
 
-// ---------- Manual Overhaul & Add Medicine Engine ----------
+// Catalog and inventory adjustment engine
 function refreshDrugDropdowns(){
   const drugOpts = DRUGS.map(d=>`<option value="${d.key}">${d.name}</option>`).join('');
   ['rDrug','inwardDrug','qmDrug','moDrug'].forEach(id=>{
@@ -1246,6 +1211,7 @@ function initManualOverhaul(){
     logAuditWrite(`${activeOperator.name} (Manual Overhaul)`, `Updated ${p.id} (${p.district}): ${m?.name||dk}=${m?.stock||'—'}u, burn=${m?.per||'—'}/d, beds=${p.bedsOccupied}/${p.bedsTotal}, staff=${p.staffPresent}/${p.staffTotal}, footfall=${p.footfallToday}, cold=${p.coldTemp}°C. Note: ${notes}`);
     toast('Facility Overhaul Committed', `${p.name} updated · Note: ${notes}`);
     broadcastLedgerChange('MANUAL_OVERHAUL', { id: p.id, phc: p });
+    if(API) apiPost(`/api/phcs/${p.id}/update`, { drug: dk, stock: m?.stock, footfallToday: p.footfallToday, bedsOccupied: p.bedsOccupied, staffPresent: p.staffPresent, coldTemp: p.coldTemp, actor: activeOperator.name, note: notes });
 
     refreshAll();
     syncPortalFacility(p.id);
@@ -1402,13 +1368,13 @@ $('btnApplyVoice').onclick=()=>{
   applyUpdate($('voicePhc').value, parsed, 'voice:'+$('voiceLang').value);
 };
 
-// 4. Vision OCR & Presets
-function triggerMockOcr(imageSrc, label){
+// Vision OCR & Document Processing
+function processRegisterOcr(imageSrc, label){
   const prev = $('visionPreview');
   const out = $('visionOut');
   prev.classList.add('scanning');
   prev.innerHTML = `<img src="${imageSrc}" alt="Register" style="max-height:160px;object-fit:cover"><span style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.7);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px">${label}</span>`;
-  out.innerHTML = '<p style="color:var(--muted);margin-top:8px">Running Vertex AI Vision OCR &amp; structuring medicine entries with Gemini Multimodal…</p>';
+  out.innerHTML = '<p style="color:var(--muted);margin-top:8px">Processing optical document character recognition &amp; structuring ledger entries…</p>';
 
   setTimeout(()=>{
     prev.classList.remove('scanning');
@@ -1422,7 +1388,7 @@ function triggerMockOcr(imageSrc, label){
       ${rows.map(r=>`<tr><td><b>${r.name}</b></td><td>${r.qty} units</td><td>${Math.round(r.conf*100)}%</td></tr>`).join('')}
     </table>
     <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
-      <button class="btn primary" id="btnVisionApply">Confirm &amp; Commit to Ledger</button>
+      <button class="btn primary" id="btnVisionApply">Commit</button>
       <span style="font-size:12px;color:var(--muted)">Verified by duty pharmacist</span>
     </div>`;
 
@@ -1446,7 +1412,7 @@ function triggerMockOcr(imageSrc, label){
   }, 1100);
 }
 
-// Generate realistic simulated register canvas data URLs for testing
+// Render representative ledger document canvas for optical character scanning
 function createRegisterCanvas(type){
   const c = document.createElement('canvas');
   c.width = 600; c.height = 200;
@@ -1465,13 +1431,13 @@ function createRegisterCanvas(type){
   return c.toDataURL('image/png');
 }
 
-$('btnSampleRegister1').onclick = () => triggerMockOcr(createRegisterCanvas(1), 'Daily Stock Register (Sample 1)');
-$('btnSampleRegister2').onclick = () => triggerMockOcr(createRegisterCanvas(2), 'Emergency Ward Log (Sample 2)');
+$('btnSampleRegister1').onclick = () => processRegisterOcr(createRegisterCanvas(1), 'Daily Stock Register (Sample 1)');
+$('btnSampleRegister2').onclick = () => processRegisterOcr(createRegisterCanvas(2), 'Emergency Ward Log (Sample 2)');
 
 $('visionFile').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
   const url=URL.createObjectURL(f);
-  triggerMockOcr(url, f.name);
+  processRegisterOcr(url, f.name);
 };
 
 // 5. Daily Vitals & Beds
@@ -1547,7 +1513,7 @@ function applyUpdate(id, p, src){
   selectRecord(id, false);
 }
 
-// ---------- Quick Update Modal (From Network Record Pane) ----------
+// Rapid inventory adjustment modal
 let modalTargetPhcId = null;
 
 window.openQuickUpdate = function(id){
@@ -1611,7 +1577,7 @@ $('btnSaveModal').onclick = () => {
   selectRecord(p.id, false);
 };
 
-// ---------- Forecast View ----------
+// Projected depletion and demand forecast view
 function renderForecast(){
   const rows=PHCS.map(p=>({p,w:worstCover(p)})).sort((a,b)=>a.w.days-b.w.days).slice(0,18);
   $('fcCount').textContent=rows.length+' highest-risk facilities';
@@ -1631,7 +1597,7 @@ function renderForecast(){
       </div>
       <div style="display:flex;gap:6px;justify-content:flex-end">
         <button class="btn quiet sm" onclick="openDrawer('${p.id}')">Inspect</button>
-        <button class="btn sm" onclick="quickRoute('${p.id}')">Plan transfer</button>
+        <button class="btn sm" onclick="quickRoute('${p.id}')">Transfer</button>
       </div>
     </div>`;
   }).join('');
@@ -1661,10 +1627,10 @@ function drawForecastChart(){
   }
   ctx.fillStyle='#6e6e73';ctx.font='20px Inter';
   ctx.fillText('National avg daily footfall — 14d history + 7d projection',20,28);
-  line(nat,0,'#1d1d1f'); line(proj,W*0.55,'#0071e3');
+  line(nat,0,'#1d1d1f'); line(proj,W*0.55,'#059669');
 }
 
-// ---------- Federated View ----------
+// Federated telemetry and analytics view
 function renderFederated(){
   const states=[...new Set(PHCS.map(p=>p.state))];
   $('fedGrid').innerHTML=states.map((s,i)=>{
@@ -1681,7 +1647,7 @@ function renderFederated(){
   }).join('');
 }
 
-// ---------- Redistribution Agent ----------
+// Inter-facility stock redistribution engine
 function haversine(a,b,c,d){
   const R=6371,t=Math.PI/180;
   const h=Math.sin((c-a)*t/2)**2+Math.cos(a*t)*Math.cos(c*t)*Math.sin((d-b)*t/2)**2;
@@ -1712,10 +1678,10 @@ function runAgent(){
     ${cands.map((c,i)=>`<tr><td>${i===0?'Recommended':'Alternate '+(i)}</td><td>${c.p.name}, ${c.p.district} (${c.m.stock.toLocaleString('en-IN')}u)</td><td>${c.d.toFixed(0)} km</td><td>${Math.min(qty,c.m.stock-Math.round(c.m.safety*1.2)).toLocaleString('en-IN')}u</td></tr>`).join('')}
   </table>
   <div style="display:flex;gap:8px;margin-top:10px">
-    <button class="btn primary" id="btnConfirm">Confirm transfer ${qty.toLocaleString('en-IN')}u → ${need.district}</button>
+    <button class="btn primary" id="btnConfirm">Confirm</button>
   </div>`;
 
-  $('routeBox').innerHTML=`TRANSFER PLAN · ${drug.name}<br>${best.p.name}, ${best.p.district}  →  ${need.name}, ${need.district}<br>Qty ${qty.toLocaleString('en-IN')} units · ${best.d.toFixed(0)} km · ETA ${eta}h @38km/h<br>Covers ${need.id} for +${(qty/Math.max(1,mNeed.per)).toFixed(0)} days. Awaiting confirmation.<br><button onclick="viewRoute('${need.id}')">View route on map</button>`;
+  $('routeBox').innerHTML=`TRANSFER PLAN · ${drug.name}<br>${best.p.name}, ${best.p.district}  →  ${need.name}, ${need.district}<br>Qty ${qty.toLocaleString('en-IN')} units · ${best.d.toFixed(0)} km · ETA ${eta}h @38km/h<br>Covers ${need.id} for +${(qty/Math.max(1,mNeed.per)).toFixed(0)} days. Awaiting confirmation.<br><div style="margin-top:8px"><button class="btn sm quiet" onclick="viewRoute('${need.id}')">View Route</button></div>`;
   log.innerHTML+=`<div>[${new Date().toLocaleTimeString('en-IN')}] ${id}←${best.p.id} ${dk} qty=${qty} dist=${best.d.toFixed(0)}km eta=${eta}h cover=${cov.days.toFixed(1)}d → ROUTE PLANNED</div>`;
 
   lastRoute={from:best.p.id,to:need.id,flat:best.p.lat,flng:best.p.lng,tlat:need.lat,tlng:need.lng};
@@ -1743,7 +1709,7 @@ function runAgent(){
 window.viewRoute=function(id){ switchView('network'); selectRecord(id); };
 $('btnAgent').onclick=runAgent;
 
-// ---------- Method Tabs & Filters ----------
+// Tab navigation and filter event bindings
 document.querySelectorAll('#mainNav button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 document.querySelectorAll('.method-tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.method-tab').forEach(x=>x.classList.toggle('active',x===b));
@@ -1759,7 +1725,7 @@ $('portalPhcSelect').onchange = e => {
   playSound('click');
 };
 
-// ---------- Keyboard Flow (/ search · ↑↓ move · t transfer) ----------
+// Keyboard shortcuts and accessibility navigation
 document.addEventListener('keydown',e=>{
   const tag=(document.activeElement&&document.activeElement.tagName)||'';
   const typing=/INPUT|TEXTAREA|SELECT/.test(tag);
@@ -1785,7 +1751,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='t'&&selectedId){ quickRoute(selectedId); }
 });
 
-// ---------- Simulation Tick (every 4s) ----------
+// Periodic telemetry simulation loop
 let tick=0;
 function simTick(){
   if(!simRunning) return;
@@ -1817,13 +1783,13 @@ function refreshAll(light){
   if($('v-depot') && $('v-depot').classList.contains('active')) renderDepot();
 }
 
-// ---------- Clock ----------
+// Real-time digital clock display
 setInterval(()=>{
   const clk = $('clock');
   if(clk) clk.textContent = new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
 }, 1000);
 
-// ---------- Firebase Live Binding (when real keys are provided) ----------
+// Firebase Cloud Firestore realtime listeners
 function bindFirebase(){
   if(!hasFirebase || !window.firebase) return;
   startFirebase();
@@ -1876,8 +1842,171 @@ function startFirebase(){
   }catch(e){ console.warn('[live] firebase init failed', e); }
 }
 
-// ---------- Init ----------
+function initSidebar(){
+  const btnToggle = $('btnToggleOpSidebar');
+  const btnClose = $('btnCloseOpSidebar');
+  const sb = $('opSidebar');
+  const bd = $('sidebarBackdrop');
+
+  function openSidebar(){
+    if(sb){
+      sb.classList.add('open');
+      if(bd) bd.classList.add('active');
+      playSound('click');
+    }
+  }
+
+  function closeSidebar(){
+    if(sb){
+      sb.classList.remove('open');
+      if(bd) bd.classList.remove('active');
+    }
+  }
+
+  if(btnToggle){
+    btnToggle.onclick = e => {
+      e.stopPropagation();
+      if(sb && sb.classList.contains('open')) closeSidebar();
+      else openSidebar();
+    };
+  }
+
+  if(btnClose){
+    btnClose.onclick = () => {
+      closeSidebar();
+      playSound('click');
+    };
+  }
+
+  if(bd){
+    bd.onclick = () => closeSidebar();
+  }
+
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && sb && sb.classList.contains('open')){
+      closeSidebar();
+    }
+  });
+}
+
+// Mobile viewport gesture constraints
+(function setupMobileZoomLock(){
+  // Prevent iOS pinch gesture zoom except for Leaflet map
+  document.addEventListener('gesturestart', function(e) {
+    if (!e.target.closest('#pmap')) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturechange', function(e) {
+    if (!e.target.closest('#pmap')) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gestureend', function(e) {
+    if (!e.target.closest('#pmap')) e.preventDefault();
+  }, { passive: false });
+
+  // Prevent multi-touch pinch zoom
+  document.addEventListener('touchmove', function(e) {
+    if (e.touches && e.touches.length > 1 && !e.target.closest('#pmap')) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Prevent double tap to zoom on iOS
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', function(e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300 && !e.target.closest('input, textarea, select')) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+})();
+
+// Interactive contextual information popovers
+function initInfoPopovers(){
+  let popover = document.getElementById('globalInfoPopover');
+  if(!popover){
+    popover = document.createElement('div');
+    popover.id = 'globalInfoPopover';
+    popover.className = 'info-popover';
+    popover.setAttribute('role', 'tooltip');
+    popover.innerHTML = '<p class="info-popover-text" id="globalInfoText"></p>';
+    document.body.appendChild(popover);
+  }
+
+  let activeBtn = null;
+
+  function hidePopover(){
+    popover.classList.remove('show');
+    if(activeBtn){
+      activeBtn.classList.remove('active');
+      activeBtn = null;
+    }
+  }
+
+  function showPopover(btn){
+    const text = btn.getAttribute('data-info');
+    if(!text) return;
+
+    if(activeBtn === btn){
+      hidePopover();
+      return;
+    }
+
+    if(activeBtn) activeBtn.classList.remove('active');
+    activeBtn = btn;
+    btn.classList.add('active');
+
+    const infoTextEl = document.getElementById('globalInfoText');
+    if(infoTextEl) infoTextEl.textContent = text;
+
+    popover.style.display = 'block';
+    popover.classList.add('show');
+
+    const rect = btn.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+
+    let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+    let top = rect.bottom + 8;
+
+    if(left < 10) left = 10;
+    if(left + popRect.width > window.innerWidth - 10){
+      left = window.innerWidth - popRect.width - 10;
+    }
+
+    if(top + popRect.height > window.innerHeight - 10){
+      top = rect.top - popRect.height - 8;
+    }
+
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(top)}px`;
+  }
+
+  window.showInfoPopover = showPopover;
+  window.hideInfoPopover = hidePopover;
+
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.info-btn');
+    if(btn){
+      e.stopPropagation();
+      showPopover(btn);
+    } else if(!e.target.closest('#globalInfoPopover')){
+      hidePopover();
+    }
+  });
+
+  window.addEventListener('resize', hidePopover);
+  window.addEventListener('scroll', e => {
+    if(e.target === window || e.target === document || e.target === document.body){
+      hidePopover();
+    }
+  }, true);
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape') hidePopover();
+  });
+}
+
+// Application bootstrapping
 (function init(){
+  initSidebar();
   initOperatorSwitcher();
   initAuthModal();
   initSettingsModal();
@@ -1885,6 +2014,7 @@ function startFirebase(){
   setupSimControls();
   initManualOverhaul();
   initAddMedicine();
+  initInfoPopovers();
 
   const states=[...new Set(PHCS.map(p=>p.state))].sort();
   $('fState').innerHTML='<option value="">All states</option>'+states.map(s=>`<option>${s}</option>`).join('');
@@ -1902,6 +2032,26 @@ function startFirebase(){
   renderFederated();
   setSyncLabel();
   bindFirebase();
+
+  // Load live facility ledgers from backend if connected
+  if(API){
+    fetch(API + '/api/phcs')
+      .then(res => res.json())
+      .then(data => {
+        if(data && Array.isArray(data) && data.length){
+          PHCS = data;
+          refreshAll();
+          selectRecord(PHCS[0].id, false);
+          syncPortalFacility(PHCS[0].id);
+          setSyncLabel();
+          toast('Cloud Connected', 'Loaded 60 facility inventories from database');
+        }
+      })
+      .catch(err => {
+        console.info('[Network] Cloud server offline — local cache active');
+        setSyncLabel();
+      });
+  }
 
   const worst0=PHCS.map(p=>({p,w:worstCover(p)})).sort((a,b)=>a.w.days-b.w.days)[0];
   if(worst0){
@@ -1923,6 +2073,28 @@ function startFirebase(){
       const sheet = $('ledgerSheet');
       if(sheet) sheet.scrollIntoView({behavior:'smooth', block:'start'});
     };
+  }
+
+  // Initial view from URL param or hash if present
+  const rawView = new URLSearchParams(window.location.search).get('view') || window.location.hash.replace('#','');
+  const initialView = rawView.replace(/[^a-z0-9_-]/gi, '');
+  if(initialView) switchView(initialView);
+
+  if(new URLSearchParams(window.location.search).get('openInfo')){
+    const runOpen = () => {
+      const activeView = document.querySelector('.view.active');
+      const infoBtn = activeView ? activeView.querySelector('.info-btn') : document.querySelector('.info-btn');
+      if(infoBtn && window.showInfoPopover) window.showInfoPopover(infoBtn);
+    };
+    runOpen();
+    setTimeout(runOpen, 300);
+  }
+
+  if(new URLSearchParams(window.location.search).get('openDrawer')){
+    setTimeout(() => {
+      const toggleBtn = document.getElementById('btnToggleOpSidebar');
+      if(toggleBtn) toggleBtn.click();
+    }, 600);
   }
 
   simInterval = setInterval(simTick, 4000);
