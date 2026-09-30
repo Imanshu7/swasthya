@@ -2,7 +2,7 @@
 ### Real-Time National PHC Operations, Multimodal AI Field Input, and Autonomous Cross-District Redistribution
 
 > **Google Build with AI: Code for Communities Hackathon Submission**  
-> **Track 3:** Smart Health & Supply Chain Resilience  
+> **Track:** Healthcare & Community Resilience  
 > **Live Demo:** [https://Imanshu7.github.io/swasthya/](https://Imanshu7.github.io/swasthya/)  
 > **Repository:** [https://github.com/Imanshu7/swasthya](https://github.com/Imanshu7/swasthya)
 
@@ -14,7 +14,7 @@ Across India's rural public healthcare network, over **30,000 Primary Health Cen
 
 These stockouts do not stem from national manufacturing shortages. Rather, they are caused by **information latency and supply friction**:
 1. **Paper-Based Register Lag:** Ground staff manually record medicine dispensations in physical ledgers, creating a 7 to 21-day reporting delay before district medical officers detect a deficit.
-2. **Climate & Monsoon Disconnections:** Severe weather anomalies cause unexpected disease surges (example acute diarrhea or seasonal fever) while cutting off road logistics.
+2. **Climate & Monsoon Disconnections:** Severe weather anomalies cause unexpected disease surges (e.g. acute diarrhea or seasonal fever) while cutting off road logistics.
 3. **Cold-Chain Breakdowns:** Vaccines, insulins, and uterotonics spoil when remote refrigeration systems breach the critical 2°C–8°C threshold.
 4. **Isolated Inventory Silos:** While one clinic faces an acute emergency stockout, a neighboring clinic less than 50 km away often holds surplus stock expiring on the shelf.
 
@@ -150,12 +150,6 @@ window.GCLOUD = {
 | `↑` / `↓` | Navigate through facility records in the national ledger |
 | `Enter` | Select and inspect facility details in the active pane |
 | `t` | Instantly launch the AI Redistribution Agent for the selected facility |
-
----
-
-## Team Members
-- Himanshu
-- Krish Pranami
 
 ---
 
