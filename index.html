@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -45,7 +45,7 @@
     <div class="top-meta">
       <div class="sync" id="liveLabel" title="Real-time sync status">
         <span class="pulse-dot" aria-hidden="true"></span>
-        <span class="sync-tag" id="syncTag">Cloud</span>
+        <span class="sync-tag" id="syncTag">Active</span>
         <span class="sync-clock" id="clock">--:--:--</span>
       </div>
 
@@ -1085,6 +1085,23 @@
         </div>
       </div>
 
+      <!-- Google Maps Platform API Key Section -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-top">
+          <h4>Google Maps Platform API Key</h4>
+          <span class="chip" id="mapsKeyStatusBadge">CARTO / OSM</span>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted)">Configure a Google Cloud Maps JavaScript API key (<code>AIzaSy...</code>) to activate live Google Maps with road navigation across all 60 PHCs. You can also paste it in <code>firebase-config.js</code>.</p>
+        <div class="field" style="margin:10px 0">
+          <label for="mapsApiKeyInput">Google Maps API Key</label>
+          <input type="password" id="mapsApiKeyInput" placeholder="AIzaSy..." autocomplete="off">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btnSaveMapsKey">Save &amp; Activate Google Maps</button>
+          <button class="btn quiet sm" id="btnClearMapsKey">Reset to Default</button>
+        </div>
+      </div>
+
       <!-- Data Provenance Section -->
       <div class="card">
         <div class="card-top">
@@ -1117,7 +1134,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Firebase Official SDKs (Auth, Firestore, App) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>

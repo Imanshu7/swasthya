@@ -7,7 +7,14 @@
 // Live Configuration from environment / firebase-config.js
 const LIVE = Object.assign({mode:'simulation'}, window.FIREBASE_CONFIG||{}, window.GCLOUD||{});
 const hasFirebase = !!(LIVE.apiKey && !/REPLACE/i.test(LIVE.apiKey));
-const hasMaps = !!(LIVE.mapsApiKey && !/REPLACE/i.test(LIVE.mapsApiKey));
+// Google Maps API Key Configuration (localStorage or firebase-config.js)
+let MAPS_API_KEY = '';
+try {
+  MAPS_API_KEY = localStorage.getItem('google_maps_api_key') || (window.GCLOUD && window.GCLOUD.mapsApiKey) || '';
+} catch(e) {
+  MAPS_API_KEY = (window.GCLOUD && window.GCLOUD.mapsApiKey) || '';
+}
+const hasMaps = !!(MAPS_API_KEY && !/REPLACE/i.test(MAPS_API_KEY));
 const API = (LIVE.apiBase && !/REPLACE/i.test(LIVE.apiBase)) ? LIVE.apiBase.replace(/\/$/,'') : null;
 
 // Google Gemini API Configuration (User can paste API key here or use the UI "API Settings" modal)
@@ -81,7 +88,7 @@ function fsWrite(writes){
 }
 
 function setSyncLabel(){
-  const tag = API ? 'Cloud' : LIVE.mode==='firebase' ? 'Firebase' : hasMaps ? 'Maps' : 'Offline';
+  const tag = (LIVE.mode==='offline') ? 'Offline' : 'Active';
   const st = $('syncTag');
   if(st) st.textContent = tag;
   const clk = $('clock');
@@ -230,6 +237,7 @@ function initAuthModal(){
   const btnOpenAuth = $('btnOpenAuth');
   if(btnOpenAuth && authModal){
     btnOpenAuth.onclick = () => {
+      if(window.closeOpSidebar) window.closeOpSidebar();
       authModal.classList.add('open');
       playSound('click');
     };
@@ -239,6 +247,7 @@ function initAuthModal(){
     btnOpenFromMenu.onclick = e => {
       e.stopPropagation();
       $('opMenu')?.classList.remove('open');
+      if(window.closeOpSidebar) window.closeOpSidebar();
       authModal.classList.add('open');
       playSound('click');
     };
@@ -246,6 +255,7 @@ function initAuthModal(){
   const btnSwitchPortal = $('btnSwitchAuthFromPortal');
   if(btnSwitchPortal && authModal){
     btnSwitchPortal.onclick = () => {
+      if(window.closeOpSidebar) window.closeOpSidebar();
       authModal.classList.add('open');
       playSound('click');
     };
@@ -389,6 +399,7 @@ function initSettingsModal(){
 
   if(btnOpen && modal){
     btnOpen.onclick = () => {
+      if(window.closeOpSidebar) window.closeOpSidebar();
       updateBadge();
       modal.classList.add('open');
       playSound('click');
@@ -428,7 +439,64 @@ function initSettingsModal(){
     };
   }
 
+  // Google Maps Platform API Key Controls
+  const mapsBadge = $('mapsKeyStatusBadge');
+  const mapsInput = $('mapsApiKeyInput');
+  const btnSaveMaps = $('btnSaveMapsKey');
+  const btnClearMaps = $('btnClearMapsKey');
+
+  function updateMapsBadge(){
+    const hasMapsKey = !!(MAPS_API_KEY && MAPS_API_KEY.trim() && !/REPLACE/i.test(MAPS_API_KEY));
+    if(mapsBadge){
+      mapsBadge.textContent = hasMapsKey ? 'Active (Google Maps)' : 'CARTO / OSM';
+      mapsBadge.className = hasMapsKey ? 'chip chip-steady' : 'chip';
+    }
+    if(mapsInput && hasMapsKey && !mapsInput.value){
+      mapsInput.value = MAPS_API_KEY;
+    }
+  }
+
+  if(btnSaveMaps){
+    btnSaveMaps.onclick = () => {
+      const val = (mapsInput?.value || '').trim();
+      if(!val){
+        alert('Please enter a valid Google Maps Platform API key (starts with AIzaSy...).');
+        return;
+      }
+      MAPS_API_KEY = val;
+      localStorage.setItem('google_maps_api_key', val);
+      updateMapsBadge();
+      playSound('chime');
+      toast('Google Maps Key Saved', 'Loading Google Maps Platform...');
+      loadGoogleMapsScript(val, () => {
+        initGoogleMap();
+        toast('Google Maps Active', 'Switched to Google Maps Platform.');
+      }, () => {
+        toast('Maps Notice', 'Google Maps check in progress. Fallback active.');
+      });
+    };
+  }
+
+  if(btnClearMaps){
+    btnClearMaps.onclick = () => {
+      MAPS_API_KEY = '';
+      localStorage.removeItem('google_maps_api_key');
+      if(mapsInput) mapsInput.value = '';
+      updateMapsBadge();
+      playSound('click');
+      toast('Maps Key Reset', 'Reverted to high-speed GIS vector map.');
+      if(gmap){
+        const el = $('pmap');
+        if(el) el.innerHTML = '';
+        gmap = null;
+        initLeafletMap();
+        updatePaneMap(true);
+      }
+    };
+  }
+
   updateBadge();
+  updateMapsBadge();
 }
 
 // State medical services depot and logistics management
@@ -748,32 +816,143 @@ function setupSimControls(){
 }
 
 // Geospatial mapping engine
-let pmap=null, facMarker=null, routeLine=null, lastRoute=null, selectedId=null;
+let pmap=null, facMarker=null, routeLine=null, lastRoute=null, selectedId=null, allFacMarkers=[];
 function markerColor(r){ return r==='critical'?'#c9211c':r==='watch'?'#b26a00':'#0e6b5e'; }
 let gmap=null, gMarker=null, gRoute=null, gAnim=null;
 
+function loadGoogleMapsScript(apiKey, onSuccess, onError){
+  if(window.google && window.google.maps){
+    if(onSuccess) onSuccess();
+    return;
+  }
+  const existing = document.getElementById('gmaps-script');
+  if(existing) existing.remove();
+
+  const s = document.createElement('script');
+  s.id = 'gmaps-script';
+  s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(apiKey) + '&callback=__gmapsReady';
+  s.async = true;
+  window.__gmapsReady = () => {
+    if(onSuccess) onSuccess();
+  };
+  s.onerror = (e) => {
+    console.warn('[live] Google Maps script failed to load', e);
+    if(onError) onError(e);
+  };
+  document.head.appendChild(s);
+}
+
 function initMap(){
-  if(window.google && window.google.maps && hasMaps) return initGoogleMap();
-  if(hasMaps){
-    const s=document.createElement('script');
-    s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(LIVE.mapsApiKey)+'&callback=__gmapsReady';
-    s.async=true; s.onerror=()=>{ console.warn('[live] google maps unreachable, leaflet used'); initLeafletMap(); };
-    window.__gmapsReady=initGoogleMap;
-    document.head.appendChild(s); return;
+  const key = MAPS_API_KEY || (window.GCLOUD && window.GCLOUD.mapsApiKey);
+  if(window.google && window.google.maps) return initGoogleMap();
+  if(key && !/REPLACE/i.test(key)){
+    loadGoogleMapsScript(key, initGoogleMap, () => {
+      console.warn('[live] Google Maps unavailable, using vector GIS map');
+      initLeafletMap();
+    });
+    return;
   }
   initLeafletMap();
 }
 
 function initLeafletMap(){
-  pmap = L.map('pmap',{scrollWheelZoom:false}).setView([22.5,79.5],4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,attribution:'© OpenStreetMap · stand-in for Google Maps Platform'}).addTo(pmap);
-  pmap.on('focus',()=>pmap.scrollWheelZoom.enable()); pmap.on('blur',()=>pmap.scrollWheelZoom.disable());
+  if(pmap) return;
+  if(typeof L === 'undefined'){
+    setTimeout(initLeafletMap, 200);
+    return;
+  }
+  const el = document.getElementById('pmap');
+  if(!el) return;
+
+  pmap = L.map('pmap', {
+    scrollWheelZoom: false,
+    zoomControl: true,
+    attributionControl: false
+  }).setView([22.5, 79.5], 5);
+
+  const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd',
+    maxZoom: 19
+  });
+
+  tileLayer.on('tileerror', function(error, tile){
+    if(!tile._retried){
+      tile._retried = true;
+      const coords = error.coords;
+      if(coords) tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
+    }
+  });
+
+  tileLayer.addTo(pmap);
+
+  pmap.on('focus', () => pmap.scrollWheelZoom.enable());
+  pmap.on('blur', () => pmap.scrollWheelZoom.disable());
+
+  setTimeout(() => { if(pmap) pmap.invalidateSize(); }, 200);
+  setTimeout(() => { if(pmap) pmap.invalidateSize(); }, 800);
+  window.addEventListener('resize', () => { if(pmap) pmap.invalidateSize(); });
 }
 
+let gFacMarkers = [];
 function initGoogleMap(){
   LIVE.mapProvider='google';
-  gmap=new google.maps.Map($('pmap'),{center:{lat:22.5,lng:79.5},zoom:4,disableDefaultUI:true,zoomControl:true});
-  setSyncLabel(); updatePaneMap(true);
+  const el = document.getElementById('pmap');
+  if(!el || !window.google || !window.google.maps) return;
+
+  if(pmap){
+    try { pmap.remove(); } catch(e){}
+    pmap = null;
+    allFacMarkers = [];
+    facMarker = null;
+    routeLine = null;
+  }
+  el.innerHTML = '';
+
+  gmap = new google.maps.Map(el, {
+    center: { lat: 22.5, lng: 79.5 },
+    zoom: 5,
+    disableDefaultUI: false,
+    zoomControl: true,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: true,
+    styles: [
+      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }
+    ]
+  });
+
+  // Plot all 60 facilities across India on Google Maps
+  gFacMarkers = PHCS.map(fac => {
+    const fr = riskOf(worstCover(fac).days);
+    const fcol = markerColor(fr);
+    const m = new google.maps.Marker({
+      position: { lat: fac.lat, lng: fac.lng },
+      map: gmap,
+      title: `${fac.name} (${fac.district})`,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 6,
+        fillColor: fcol,
+        fillOpacity: 0.9,
+        strokeColor: '#ffffff',
+        strokeWeight: 1.5
+      }
+    });
+
+    const info = new google.maps.InfoWindow({
+      content: `<div style="font-family:Inter,sans-serif;padding:3px;font-size:12px"><b>${escapeHtml(fac.name)}</b><br><span style="color:#666">${escapeHtml(fac.district)}, ${escapeHtml(fac.state)}</span></div>`
+    });
+
+    m.addListener('click', () => {
+      selectRecord(fac.id);
+      info.open(gmap, m);
+    });
+
+    return { id: fac.id, marker: m };
+  });
+
+  setSyncLabel();
+  updatePaneMap(true);
 }
 
 function animateRoute(){
@@ -788,30 +967,82 @@ function updatePaneMap(recenter){
   const p=PHCS.find(x=>x.id===selectedId); if(!p) return;
   const r=riskOf(worstCover(p).days), col=markerColor(r);
   if(gmap){
-    gmap.setCenter({lat:p.lat,lng:p.lng}); if(recenter!==false) gmap.setZoom(8);
-    if(gMarker) gMarker.setMap(null);
-    gMarker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map:gmap,title:p.name,
-      icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:col,fillOpacity:1,strokeColor:'#fff',strokeWeight:2}});
-    if(gRoute){ gRoute.setMap(null); gRoute=null; }
-    if(lastRoute && (lastRoute.to===p.id||lastRoute.from===p.id)){
-      gRoute=new google.maps.Polyline({path:[{lat:lastRoute.flat,lng:lastRoute.flng},{lat:lastRoute.tlat,lng:lastRoute.tlng}],
-        geodesic:true,strokeColor:'#059669',strokeOpacity:0,strokeWeight:3,map:gmap,
-        icons:[{icon:{path:'M 0,-1 0,1',strokeOpacity:1,scale:3},offset:'0',repeat:'18px'}]});
-      animateRoute();
-      const b=new google.maps.LatLngBounds();
-      b.extend({lat:lastRoute.flat,lng:lastRoute.flng}); b.extend({lat:lastRoute.tlat,lng:lastRoute.tlng});
-      gmap.fitBounds(b);
-    }
+    try {
+      if(recenter!==false){
+        gmap.panTo({lat:p.lat,lng:p.lng});
+        gmap.setZoom(8);
+      }
+      if(gMarker) gMarker.setMap(null);
+      gMarker=new google.maps.Marker({
+        position:{lat:p.lat,lng:p.lng},
+        map:gmap,
+        title:p.name,
+        zIndex: 9999,
+        icon:{
+          path:google.maps.SymbolPath.CIRCLE,
+          scale:10,
+          fillColor:col,
+          fillOpacity:1,
+          strokeColor:'#ffffff',
+          strokeWeight:2.5
+        }
+      });
+      if(gRoute){ gRoute.setMap(null); gRoute=null; }
+      if(lastRoute && (lastRoute.to===p.id||lastRoute.from===p.id)){
+        gRoute=new google.maps.Polyline({
+          path:[{lat:lastRoute.flat,lng:lastRoute.flng},{lat:lastRoute.tlat,lng:lastRoute.tlng}],
+          geodesic:true,strokeColor:'#059669',strokeOpacity:0.9,strokeWeight:4,map:gmap,
+          icons:[{icon:{path:'M 0,-1 0,1',strokeOpacity:1,scale:3},offset:'0',repeat:'18px'}]
+        });
+        animateRoute();
+        const b=new google.maps.LatLngBounds();
+        b.extend({lat:lastRoute.flat,lng:lastRoute.flng});
+        b.extend({lat:lastRoute.tlat,lng:lastRoute.tlng});
+        gmap.fitBounds(b);
+      }
+    } catch(e){ console.warn('[gmap] update failed', e); }
     return;
   }
-  if(!pmap) return;
+  if(!pmap){
+    initLeafletMap();
+    if(!pmap) return;
+  }
+
+  pmap.invalidateSize();
+
+  // Plot and sync all network facility markers
+  if(!allFacMarkers || allFacMarkers.length === 0){
+    allFacMarkers = PHCS.map(fac => {
+      const fr = riskOf(worstCover(fac).days);
+      const fcol = markerColor(fr);
+      const m = L.circleMarker([fac.lat, fac.lng], {
+        radius: 5,
+        fillColor: fcol,
+        color: '#ffffff',
+        weight: 1.5,
+        fillOpacity: 0.85
+      }).addTo(pmap);
+      m.bindTooltip(`<b>${fac.name}</b><br>${fac.district}, ${fac.state}`, {direction:'top', offset:[0,-4]});
+      m.on('click', () => selectRecord(fac.id));
+      return { id: fac.id, marker: m };
+    });
+  } else {
+    allFacMarkers.forEach(item => {
+      const fac = PHCS.find(x => x.id === item.id);
+      if(fac){
+        const fr = riskOf(worstCover(fac).days);
+        item.marker.setStyle({ fillColor: markerColor(fr) });
+      }
+    });
+  }
+
   if(recenter!==false) pmap.setView([p.lat,p.lng],8);
   if(facMarker) pmap.removeLayer(facMarker);
-  const icon=L.divIcon({className:'',html:`<div class="dot-marker pulse-${r}" style="background:${col};color:${col}"></div>`,iconSize:[12,12]});
-  facMarker=L.marker([p.lat,p.lng],{icon}).addTo(pmap).bindTooltip(p.name);
+  const icon=L.divIcon({className:'',html:`<div class="dot-marker pulse-${r}" style="background:${col};color:${col};width:14px;height:14px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px ${col}"></div>`,iconSize:[14,14],iconAnchor:[7,7]});
+  facMarker=L.marker([p.lat,p.lng],{icon,zIndexOffset:1000}).addTo(pmap).bindTooltip(`<b>${p.name}</b> · ${p.district}`);
   if(routeLine){ pmap.removeLayer(routeLine); routeLine=null; }
   if(lastRoute && (lastRoute.to===p.id||lastRoute.from===p.id)){
-    routeLine=L.polyline([[lastRoute.flat,lastRoute.flng],[lastRoute.tlat,lastRoute.tlng]],{color:'#059669',weight:3,className:'flow-line'}).addTo(pmap);
+    routeLine=L.polyline([[lastRoute.flat,lastRoute.flng],[lastRoute.tlat,lastRoute.tlng]],{color:'#059669',weight:4,className:'flow-line'}).addTo(pmap);
     pmap.fitBounds(routeLine.getBounds().pad(0.35));
   }
 }
@@ -928,6 +1159,7 @@ window.switchView = function(v){
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));
   if(v==='field') syncPortalFacility(selectedId);
   if(v==='depot') renderDepot();
+  if(v==='network') setTimeout(()=>{ if(pmap) pmap.invalidateSize(); }, 120);
   playSound('click');
 };
 
@@ -1554,6 +1786,7 @@ window.openQuickUpdate = function(id){
     if(med) $('qmStock').value = med.stock;
   };
 
+  if(window.closeOpSidebar) window.closeOpSidebar();
   $('quickModal').classList.add('open');
   playSound('click');
 };
@@ -1842,7 +2075,7 @@ function startFirebase(){
             avatar: initials,
             abha: 'ABHA-GOOG-' + user.uid.slice(0,8).toUpperCase()
           });
-          toast('Firebase Session Active', `Signed in as ${user.email || name}`);
+          toast('Session Active', `Signed in as ${user.email || name}`);
         }
       });
     }
@@ -1890,7 +2123,7 @@ function startFirebase(){
         const worst=PHCS.map(p=>({p,w:worstCover(p)})).sort((a,b)=>a.w.days-b.w.days)[0];
         if(worst){ selectRecord(worst.p.id, false); syncPortalFacility(worst.p.id); }
         LIVE.mode='firebase'; setSyncLabel();
-        toast('Firestore Connected', `Loaded ${loaded.length} PHC facility records from cloud`);
+        toast('Live Sync Active', `Loaded ${loaded.length} PHC facility records`);
       }
     }).catch(e => console.warn('[firestore] initial load failed, using offline cache', e));
 
@@ -1931,6 +2164,7 @@ function initSidebar(){
       if(bd) bd.classList.remove('active');
     }
   }
+  window.closeOpSidebar = closeSidebar;
 
   if(btnToggle){
     btnToggle.onclick = e => {
