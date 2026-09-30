@@ -1,7 +1,7 @@
-
+const FIREBASE_API_KEY;
 window.FIREBASE_CONFIG = {
   // Real Firebase Web API Key
-  apiKey: FIREBASE_API_KEY,
+  apiKey: "AIzaSyAraJ4DNowz9cHxpHmq5TbzKBeTT39WHzw",
   authDomain: "anantmesh-faa44.firebaseapp.com",
   databaseURL: "https://anantmesh-faa44-default-rtdb.firebaseio.com",
   projectId: "anantmesh-faa44",
