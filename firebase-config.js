@@ -1,4 +1,4 @@
-const FIREBASE_API_KEY;
+
 window.FIREBASE_CONFIG = {
   // Real Firebase Web API Key
   apiKey: "AIzaSyAraJ4DNowz9cHxpHmq5TbzKBeTT39WHzw",
