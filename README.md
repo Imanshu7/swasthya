@@ -13,8 +13,8 @@
 ---
 
 ## The Team
-- **Himanshu** – Frontend Architecture & UI/UX Design
-- **Krish Pranami** – Backend Engineering & Cloud Architecture
+- **Himanshu** – Frontend Architecture & UI/UX Design **|**  **GitHub:** [https://github.com/Imanshu7](https://github.com/Imanshu7)
+- **Krish Pranami** – Backend Engineering & Cloud Architecture  **|**  **GitHub:** [https://github.com/krish180242](https://github.com/krish180242)
 
 ---
 
